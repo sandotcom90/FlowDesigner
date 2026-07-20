@@ -1,10 +1,16 @@
 import { getSmoothStepPath, Position } from "@xyflow/react";
 import { nodeSize } from "./nodes";
-import { anchorOf } from "./editor/ops";
+import { anchorOf, TYPE_LABEL } from "./editor/ops";
 
 const POS = { t: Position.Top, r: Position.Right, b: Position.Bottom, l: Position.Left };
 const GRAY = "#5b6470";
 const PAPER = "#f2f3ee";
+
+function tooltipText(label, kindName, attrs) {
+  const lines = [`${label} — ${kindName}`];
+  Object.entries(attrs || {}).forEach(([k, v]) => lines.push(`${k}: ${v}`));
+  return lines.join("\n");
+}
 
 const esc = (s = "") =>
   String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
@@ -82,7 +88,37 @@ function labelOffsets(type) {
  * proc: the currently highlighted process object, or null.
  * Returns { svg, width, height }.
  */
-export function buildDiagramSvg(cfg, proc) {
+function membershipMaps(cfg) {
+  const nodeP = {}, edgeP = {}, grpP = {};
+  const add = (m, id, pid) => ((m[id] = m[id] || []).push(pid));
+  cfg.processes.forEach((p) => {
+    p.nodes.forEach((n) => add(nodeP, n, p.id));
+    (p.edges || []).forEach((e) => add(edgeP, e, p.id));
+  });
+  (cfg.groups || []).forEach((g) => {
+    const tree = new Set([g.id]);
+    let changed = true;
+    while (changed) {
+      changed = false;
+      for (const o of cfg.groups || [])
+        if (o.group && tree.has(o.group) && !tree.has(o.id)) { tree.add(o.id); changed = true; }
+    }
+    cfg.processes.forEach((p) => {
+      if (p.nodes.some((nid) => {
+        const n = cfg.nodes.find((x) => x.id === nid);
+        return n && n.group && tree.has(n.group);
+      })) add(grpP, g.id, p.id);
+    });
+  });
+  return { nodeP, edgeP, grpP };
+}
+
+const pcls = (m, id) => (m[id] || []).map((p) => ` p-${p}`).join("");
+
+export function buildDiagramSvg(cfg, proc, opts = {}) {
+  const inter = !!opts.interactive;
+  if (inter) proc = null;
+  const maps = inter ? membershipMaps(cfg) : null;
   const color = proc?.color || "#2563eb";
   let litNodes = null, litEdges = null;
   if (proc) {
@@ -147,26 +183,61 @@ export function buildDiagramSvg(cfg, proc) {
       });
     }
     const both = e.direction === "both" ? ` marker-start="url(#${markerFor(stroke)})"` : "";
+    const tt = tooltipText(e.label || `${e.source} \u2192 ${e.target}`, "connection", e.attrs);
+    const gCls = inter
+      ? ` class="el edge${pcls(maps.edgeP, e.id)}${e.direction === "both" ? " two" : ""}"`
+      : dim ? ' class="dim"' : "";
     edgeParts.push(
-      `<path d="${d}" fill="none" stroke="${stroke}" stroke-width="${sw}" marker-end="url(#${markerFor(stroke)})"${both}${dim ? ' class="dim"' : ""}/>`
+      `<g${gCls}><title>${esc(tt)}</title><path class="vis" d="${d}" fill="none" stroke="${stroke}" stroke-width="${sw}" marker-end="url(#${markerFor(stroke)})"${both}/><path d="${d}" fill="none" stroke="transparent" stroke-width="14"/></g>`
     );
     if (e.label) {
       edgeLabelParts.push(
-        `<text x="${lx}" y="${ly}" class="elabel" text-anchor="middle" dominant-baseline="central"${
+        `<text x="${lx}" y="${ly}" class="elabel${inter ? ` el${pcls(maps.edgeP, e.id)}` : ""}" text-anchor="middle" dominant-baseline="central"${
           e.fontSize ? ` font-size="${e.fontSize}px"` : ""
         }${lit ? ` fill="${color}"` : ""}${dim ? ' opacity="0.14"' : ""}>${esc(e.label)}</text>`
       );
     }
   });
 
-  /* groups */
-  const groupParts = (cfg.groups || []).map((g) => {
-    const hasLit = litNodes ? cfg.nodes.some((n) => n.group === g.id && litNodes.has(n.id)) : true;
-    return `<g${!hasLit ? ' class="dim"' : ""}>
+  /* groups: parents first so nested boxes draw on top */
+  const gById = Object.fromEntries((cfg.groups || []).map((g) => [g.id, g]));
+  const gDepth = (g) => {
+    let d = 0, cur = g;
+    const seen = new Set();
+    while (cur.group && gById[cur.group] && !seen.has(cur.id)) {
+      seen.add(cur.id);
+      cur = gById[cur.group];
+      d++;
+      if (d > 50) break;
+    }
+    return d;
+  };
+  const inGroupTree = (gid) => {
+    const set = new Set([gid]);
+    let changed = true;
+    while (changed) {
+      changed = false;
+      for (const g of cfg.groups || []) {
+        if (g.group && set.has(g.group) && !set.has(g.id)) { set.add(g.id); changed = true; }
+      }
+    }
+    return set;
+  };
+  const groupParts = [...(cfg.groups || [])]
+    .sort((a, b) => gDepth(a) - gDepth(b))
+    .map((g) => {
+      const tree = inGroupTree(g.id);
+      const hasLit = litNodes
+        ? cfg.nodes.some((n) => n.group && tree.has(n.group) && litNodes.has(n.id))
+        : true;
+      const tt = tooltipText(g.label, "container", g.attrs);
+      const gCls = inter ? ` class="el grp${pcls(maps.grpP, g.id)}"` : !hasLit ? ' class="dim"' : "";
+      return `<g${gCls}>
+<title>${esc(tt)}</title>
 <rect x="${g.position.x}" y="${g.position.y}" width="${g.size.w}" height="${g.size.h}" rx="10" fill="rgba(255,255,255,0.35)" stroke="#9aa2ad" stroke-width="1.5"/>
 <text x="${g.position.x + 12}" y="${g.position.y + 14}" class="glabel"${g.fontSize ? ` font-size="${g.fontSize}px"` : ""}>${esc(g.label.toUpperCase())}</text>
 </g>`;
-  });
+    });
 
   /* nodes */
   const nodeParts = cfg.nodes.map((n) => {
@@ -175,13 +246,20 @@ export function buildDiagramSvg(cfg, proc) {
     const dim = litNodes && !lit;
     const { dx, dy } = labelOffsets(n.type);
     const cls = lit ? "lit" : dim ? "dim" : "";
-    return `<g transform="translate(${n.position.x},${n.position.y})"${cls ? ` class="${cls}"` : ""}${
+    const tt = tooltipText(n.label, TYPE_LABEL[n.type] || n.type, n.attrs);
+    const nCls = inter ? `el node${pcls(maps.nodeP, n.id)}` : cls;
+    return `<g transform="translate(${n.position.x},${n.position.y})"${nCls ? ` class="${nCls}"` : ""}${
       lit ? ' filter="url(#litshadow)"' : ""
     }>
+<title>${esc(tt)}</title>
 ${shapeMarkup(n.type, w, h)}
 <text x="${w / 2 + dx}" y="${h / 2 + dy}" class="nlabel" text-anchor="middle" dominant-baseline="central"${n.fontSize ? ` font-size="${n.fontSize}px"` : ""}>${esc(n.label)}</text>
 </g>`;
   });
+
+  const procMarkers = inter
+    ? Object.fromEntries(cfg.processes.map((p) => [p.id, markerFor(p.color || "#2563eb")]))
+    : null;
 
   const markerDefs = [...markers.entries()]
     .map(
@@ -223,5 +301,77 @@ ${nodeParts.join("\n")}
 ${edgeLabelParts.join("\n")}
 </svg>`;
 
-  return { svg, width, height };
+  return { svg, width, height, procMarkers };
+}
+
+
+/**
+ * Standalone, script-free HTML page of the diagram. Highlighting works
+ * without any JavaScript: hidden radio inputs + CSS sibling selectors,
+ * so it survives hosts that strip <script> (Confluence, SharePoint).
+ */
+export function buildStaticHtml(cfg, proc) {
+  const { svg, procMarkers } = buildDiagramSvg(cfg, null, { interactive: true });
+  const title = esc(cfg.meta?.title || "Interface Diagram");
+
+  const radios =
+    `<input type="radio" name="proc" id="r-none"${proc ? "" : " checked"}>` +
+    cfg.processes
+      .map((p) => `<input type="radio" name="proc" id="r-${p.id}"${proc && proc.id === p.id ? " checked" : ""}>`)
+      .join("");
+
+  const legend =
+    cfg.processes
+      .map(
+        (p) =>
+          `<label class="lg" for="r-${p.id}" title="${esc(p.description || p.name)}"><i style="background:${p.color || "#2563eb"}"></i>${esc(p.name)}</label>`
+      )
+      .join("") + `<label class="lg all" for="r-none">show all</label>`;
+
+  const rules = cfg.processes
+    .map((p) => {
+      const c = p.color || "#2563eb";
+      const m = procMarkers[p.id];
+      return `
+#r-${p.id}:checked ~ main svg .el:not(.p-${p.id}){opacity:.12;filter:grayscale(.85)}
+#r-${p.id}:checked ~ main svg g.edge.p-${p.id} path.vis{stroke:${c};stroke-width:2.6;marker-end:url(#${m})}
+#r-${p.id}:checked ~ main svg g.edge.p-${p.id}.two path.vis{marker-start:url(#${m})}
+#r-${p.id}:checked ~ main svg text.elabel.p-${p.id}{fill:${c};opacity:1}
+#r-${p.id}:checked ~ main svg g.node.p-${p.id}{filter:url(#litshadow)}
+#r-${p.id}:checked ~ header label[for=r-${p.id}]{font-weight:bold;border-color:currentColor;background:#fff}`;
+    })
+    .join("\n");
+
+  return `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>${title}</title>
+<style>
+body{margin:0;font-family:Consolas,'Cascadia Mono',monospace;background:#e9eae5;color:#22272e}
+input[name=proc]{position:absolute;opacity:0;pointer-events:none}
+header{padding:14px 20px;border-bottom:2px solid #38404a;background:#fafaf7;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px}
+h1{font-size:16px;margin:0;letter-spacing:.02em}
+.legend{display:flex;gap:8px;flex-wrap:wrap;font-size:12px}
+.lg{display:inline-flex;align-items:center;cursor:pointer;padding:3px 9px;border:1.5px solid #c9cdc4;border-radius:14px;user-select:none}
+.lg:hover{background:#fff}
+.lg i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:6px}
+.lg.all{color:#5b6470}
+#r-none:checked ~ header label.all{font-weight:bold;background:#fff}
+main{padding:20px;overflow:auto}
+main svg{max-width:100%;height:auto;box-shadow:0 2px 10px rgba(0,0,0,.15);border-radius:8px;background:#f2f3ee}
+main svg .el{transition:opacity .18s ease}
+footer{padding:8px 20px;font-size:11px;color:#5b6470}
+${rules}
+</style>
+</head>
+<body>
+${radios}
+<header><h1>${title}</h1><div class="legend">${legend}</div></header>
+<main>${svg}</main>
+<footer>rev ${esc(cfg.meta?.version || "\u2014")} \u00b7 ${cfg.nodes.length} nodes \u00b7 ${cfg.edges.length} links \u00b7 click a group to highlight its path \u00b7 hover any element for details</footer>
+</body>
+</html>
+`;
 }

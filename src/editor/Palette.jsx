@@ -88,7 +88,7 @@ export default function Palette({ onAdd, onAddGroup, onUnderlay, hasUnderlay }) 
       ))}
       <button
         className="palette-item"
-        title="Group box — drag onto the canvas or click to add"
+        title="Container box — drag onto the canvas or click to add"
         draggable
         onDragStart={(e) => e.dataTransfer.setData("application/diagram-type", "__group")}
         onClick={onAddGroup}
@@ -96,7 +96,7 @@ export default function Palette({ onAdd, onAddGroup, onUnderlay, hasUnderlay }) 
         <svg width="40" height="24" viewBox="0 0 40 24">
           <rect x="2" y="2" width="36" height="20" rx="4" className="mini-shape mini-group" />
         </svg>
-        <span>Group</span>
+        <span>Container</span>
       </button>
       <div className="palette-sep" />
       <button className="palette-item" title="Load an image to trace over" onClick={() => fileRef.current?.click()}>

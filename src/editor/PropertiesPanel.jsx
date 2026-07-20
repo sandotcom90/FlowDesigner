@@ -83,7 +83,7 @@ function AttrsEditor({ attrs, onChange, idKey }) {
 
 const PORTS = [["t", "top"], ["r", "right"], ["b", "bottom"], ["l", "left"]];
 
-export default function PropertiesPanel({ cfg, selection, onRename, onPatch, onDelete, onClearWaypoints, onReverse }) {
+export default function PropertiesPanel({ cfg, selection, onRename, onPatch, onDelete, onClearWaypoints, onReverse, descendantGroups }) {
   if (!selection) return null;
   const { kind, id } = selection;
   const el =
@@ -116,7 +116,7 @@ export default function PropertiesPanel({ cfg, selection, onRename, onPatch, onD
               ))}
             </select>
           </Field>
-          <Field label="group">
+          <Field label="container">
             <select
               value={el.group || ""}
               onChange={(e) => onPatch({ group: e.target.value || undefined })}
@@ -174,6 +174,26 @@ export default function PropertiesPanel({ cfg, selection, onRename, onPatch, onD
             Drag the hollow dot on any segment of the selected line to bend it right there. Drag solid dots to move bends; double-click a solid dot to remove it.
           </div>
         </>
+      )}
+
+      {kind === "group" && (
+        <Field label="parent container">
+          <select
+            value={el.group || ""}
+            onChange={(e) => onPatch({ group: e.target.value || undefined })}
+          >
+            <option value="">&#8212; none (top level) &#8212;</option>
+            {(cfg.groups || [])
+              .filter((g) => {
+                if (g.id === el.id) return false;
+                const desc = descendantGroups ? descendantGroups(cfg, el.id) : [];
+                return !desc.includes(g.id);
+              })
+              .map((g) => (
+                <option key={g.id} value={g.id}>{g.label}</option>
+              ))}
+          </select>
+        </Field>
       )}
 
       {kind === "group" && (

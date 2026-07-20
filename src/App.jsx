@@ -8,7 +8,7 @@ import "@xyflow/react/dist/style.css";
 import { ShapeNode, GroupNode, UnderlayNode, nodeSize } from "./nodes";
 import WaypointEdge from "./WaypointEdge";
 import { validateConfig } from "./validate";
-import { buildDiagramSvg } from "./exportSvg";
+import { buildDiagramSvg, buildStaticHtml } from "./exportSvg";
 import sampleConfig from "./sample-config.json";
 import schema from "./schema.json";
 import Palette from "./editor/Palette";
@@ -17,8 +17,8 @@ import ProcessBuilder from "./editor/ProcessBuilder";
 import {
   addNode, addGroup, addEdge, deleteNode, deleteEdge, deleteGroup, deleteProcess,
   renameId, updateElement, insertWaypoint, insertWaypointAt, moveWaypoint, removeWaypoint,
-  reverseEdge, deleteMany, applyNodeResize, applyGroupResize,
-  allIds, slugId, edgePoints, TYPE_LABEL
+  reverseEdge, deleteMany, applyNodeResize, applyGroupResize, setFontSizes,
+  descendantGroups, allIds, slugId, edgePoints, TYPE_LABEL
 } from "./editor/ops";
 
 const nodeTypes = { shape: ShapeNode, grouper: GroupNode, underlay: UnderlayNode };
@@ -53,9 +53,36 @@ function toFlow(cfg, opts) {
     }
   }
 
-  const groupPos = Object.fromEntries((cfg.groups || []).map((g) => [g.id, g.position]));
-  const groupHasLit = (gid) =>
-    member ? cfg.nodes.some((n) => n.group === gid && member.nodes.has(n.id)) : true;
+  const groupList = cfg.groups || [];
+  const gById = Object.fromEntries(groupList.map((g) => [g.id, g]));
+  const groupPos = Object.fromEntries(groupList.map((g) => [g.id, g.position]));
+  const gDepth = (g) => {
+    let d = 0, cur = g;
+    const seen = new Set();
+    while (cur.group && gById[cur.group] && !seen.has(cur.id)) {
+      seen.add(cur.id);
+      cur = gById[cur.group];
+      d++;
+      if (d > 50) break;
+    }
+    return d;
+  };
+  const groupTree = (gid) => {
+    const set = new Set([gid]);
+    let changed = true;
+    while (changed) {
+      changed = false;
+      for (const g of groupList) {
+        if (g.group && set.has(g.group) && !set.has(g.id)) { set.add(g.id); changed = true; }
+      }
+    }
+    return set;
+  };
+  const groupHasLit = (gid) => {
+    if (!member) return true;
+    const tree = groupTree(gid);
+    return cfg.nodes.some((n) => n.group && tree.has(n.group) && member.nodes.has(n.id));
+  };
 
   const underlayNodes = underlay
     ? [{
@@ -69,10 +96,13 @@ function toFlow(cfg, opts) {
       }]
     : [];
 
-  const groupNodes = (cfg.groups || []).map((g) => ({
+  const groupNodes = [...groupList].sort((x, y) => gDepth(x) - gDepth(y)).map((g) => ({
     id: g.id,
     type: "grouper",
-    position: { ...g.position },
+    position: g.group && gById[g.group]
+      ? { x: g.position.x - gById[g.group].position.x, y: g.position.y - gById[g.group].position.y }
+      : { ...g.position },
+    ...(g.group && gById[g.group] ? { parentId: g.group } : {}),
     data: {
       label: g.label, attrs: g.attrs, fontSize: g.fontSize,
       editable: editing && !builder,
@@ -147,22 +177,35 @@ function toFlow(cfg, opts) {
 
 function applyDrag(cfg, flowNode) {
   const next = structuredClone(cfg);
-  const groupPos = Object.fromEntries((next.groups || []).map((g) => [g.id, g.position]));
+  const groupById = Object.fromEntries((next.groups || []).map((g) => [g.id, g]));
 
-  const g = (next.groups || []).find((x) => x.id === flowNode.id);
+  const g = groupById[flowNode.id];
   if (g) {
-    const dx = flowNode.position.x - g.position.x;
-    const dy = flowNode.position.y - g.position.y;
-    g.position = { x: Math.round(flowNode.position.x), y: Math.round(flowNode.position.y) };
+    const base = g.group && groupById[g.group] ? groupById[g.group].position : { x: 0, y: 0 };
+    const newAbs = {
+      x: Math.round(base.x + flowNode.position.x),
+      y: Math.round(base.y + flowNode.position.y)
+    };
+    const dx = newAbs.x - g.position.x;
+    const dy = newAbs.y - g.position.y;
+    if (dx === 0 && dy === 0) return cfg;
+    g.position = newAbs;
+    const childGroups = descendantGroups(next, g.id);
+    childGroups.forEach((id) => {
+      const c = groupById[id];
+      c.position = { x: c.position.x + dx, y: c.position.y + dy };
+    });
+    const treeSet = new Set([g.id, ...childGroups]);
     next.nodes.forEach((n) => {
-      if (n.group === g.id) n.position = { x: n.position.x + dx, y: n.position.y + dy };
+      if (n.group && treeSet.has(n.group))
+        n.position = { x: n.position.x + dx, y: n.position.y + dy };
     });
     return next;
   }
 
   const n = next.nodes.find((x) => x.id === flowNode.id);
   if (n) {
-    const base = n.group ? groupPos[n.group] : { x: 0, y: 0 };
+    const base = n.group && groupById[n.group] ? groupById[n.group].position : { x: 0, y: 0 };
     n.position = {
       x: Math.round(base.x + flowNode.position.x),
       y: Math.round(base.y + flowNode.position.y)
@@ -213,8 +256,49 @@ function download(filename, text, mime = "application/json") {
 }
 
 export default function App() {
-  const [config, setConfig] = useState(sampleConfig);
+  const [config, _setConfig] = useState(sampleConfig);
   const [baseline, setBaseline] = useState(sampleConfig);
+  const undoRef = useRef([]);
+  const redoRef = useRef([]);
+  const [histVer, setHistVer] = useState(0);
+
+  /* every normal mutation goes through this wrapper and lands in history */
+  const setConfig = useCallback((updater) => {
+    _setConfig((cur) => {
+      const next = typeof updater === "function" ? updater(cur) : updater;
+      if (next !== cur && undoRef.current[undoRef.current.length - 1] !== cur) {
+        undoRef.current.push(cur);
+        if (undoRef.current.length > 100) undoRef.current.shift();
+        redoRef.current = [];
+        setHistVer((v) => v + 1);
+      }
+      return next;
+    });
+  }, []);
+
+  const undo = useCallback(() => {
+    const prev = undoRef.current.pop();
+    if (!prev) return;
+    _setConfig((cur) => {
+      redoRef.current.push(cur);
+      return prev;
+    });
+    setSelection(null);
+    setBuilder(null);
+    setHistVer((v) => v + 1);
+  }, []);
+
+  const redo = useCallback(() => {
+    const next = redoRef.current.pop();
+    if (!next) return;
+    _setConfig((cur) => {
+      undoRef.current.push(cur);
+      return next;
+    });
+    setSelection(null);
+    setBuilder(null);
+    setHistVer((v) => v + 1);
+  }, []);
   const [mode, setMode] = useState("view");
   const [selectedProc, setSelectedProc] = useState(null);
   const [selection, setSelection] = useState(null); /* {kind, id} */
@@ -229,6 +313,12 @@ export default function App() {
   const { screenToFlowPosition } = useReactFlow();
 
   const editing = mode === "edit";
+
+  useEffect(() => {
+    if (selectedProc && !config.processes.some((p) => p.id === selectedProc)) {
+      setSelectedProc(null);
+    }
+  }, [config, selectedProc]);
   const groupIds = useMemo(() => new Set((config.groups || []).map((g) => g.id)), [config]);
 
   const wpHandlers = useMemo(
@@ -295,7 +385,10 @@ export default function App() {
         else if (grps.length) setSelection({ kind: "group", id: grps[0] });
         else setSelection({ kind: "edge", id: eds[0] });
       } else {
-        setSelection({ kind: "multi", nodes: shapes, edges: eds, groups: grps });
+        setSelection({
+          kind: "multi", nodes: shapes, edges: eds, groups: grps,
+          use: { nodes: true, edges: true, groups: true }
+        });
       }
     },
     [editing, builder]
@@ -383,6 +476,25 @@ export default function App() {
     [editing, builder, screenToFlowPosition]
   );
 
+  const [bulkFont, setBulkFont] = useState("");
+
+  const effectiveMulti = useMemo(() => {
+    if (selection?.kind !== "multi") return null;
+    const u = selection.use;
+    return {
+      nodes: u.nodes ? selection.nodes : [],
+      edges: u.edges ? selection.edges : [],
+      groups: u.groups ? selection.groups : []
+    };
+  }, [selection]);
+
+  const applyBulkFont = useCallback(() => {
+    if (!effectiveMulti) return;
+    const size = bulkFont === "" ? null : Number(bulkFont);
+    if (size !== null && (isNaN(size) || size < 6 || size > 48)) return;
+    setConfig((c) => setFontSizes(c, effectiveMulti, size));
+  }, [effectiveMulti, bulkFont, setConfig]);
+
   const addWaypointAtMid = useCallback(() => {
     if (selection?.kind !== "edge") return;
     const e = config.edges.find((x) => x.id === selection.id);
@@ -397,8 +509,14 @@ export default function App() {
   const confirmDelete = useCallback(() => {
     if (!selection) return;
     if (selection.kind === "multi") {
-      const count = selection.nodes.length + selection.edges.length + selection.groups.length;
-      const { cfg: next, summary } = deleteMany(config, selection);
+      const eff = {
+        nodes: selection.use.nodes ? selection.nodes : [],
+        edges: selection.use.edges ? selection.edges : [],
+        groups: selection.use.groups ? selection.groups : []
+      };
+      const count = eff.nodes.length + eff.edges.length + eff.groups.length;
+      if (count === 0) return;
+      const { cfg: next, summary } = deleteMany(config, eff);
       if (window.confirm([`Delete ${count} selected item(s)?`, ...summary].join("\n"))) {
         setConfig(next);
         setSelection(null);
@@ -417,9 +535,23 @@ export default function App() {
 
   useEffect(() => {
     const onKey = (e) => {
-      if (e.key !== "Delete" && e.key !== "Backspace") return;
       const t = document.activeElement?.tagName;
-      if (t === "INPUT" || t === "TEXTAREA" || t === "SELECT") return;
+      const typing = t === "INPUT" || t === "TEXTAREA" || t === "SELECT";
+      if ((e.ctrlKey || e.metaKey) && !typing) {
+        const k = e.key.toLowerCase();
+        if (k === "z") {
+          e.preventDefault();
+          e.shiftKey ? redo() : undo();
+          return;
+        }
+        if (k === "y") {
+          e.preventDefault();
+          redo();
+          return;
+        }
+      }
+      if (e.key !== "Delete" && e.key !== "Backspace") return;
+      if (typing) return;
       if (editing && !builder && selection) {
         e.preventDefault();
         confirmDelete();
@@ -427,7 +559,7 @@ export default function App() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [editing, builder, selection, confirmDelete]);
+  }, [editing, builder, selection, confirmDelete, undo, redo]);
 
   /* ---- process builder ---- */
   const startBuilder = useCallback((proc) => {
@@ -520,7 +652,7 @@ export default function App() {
     (evt, node) => {
       if (editing) return;
       if (node.type === "underlay") return;
-      if (node.type === "grouper") return showTip(evt, node.data.label, "group", node.data.attrs);
+      if (node.type === "grouper") return showTip(evt, node.data.label, "container", node.data.attrs);
       showTip(evt, node.data.label, TYPE_LABEL[node.data.cfgType] || node.data.cfgType, node.data.attrs);
     },
     [editing]
@@ -557,7 +689,10 @@ export default function App() {
       setSelectedProc(null);
       setSelection(null);
       setBuilder(null);
-      setConfig(parsed);
+      _setConfig(parsed);
+      undoRef.current = [];
+      redoRef.current = [];
+      setHistVer((v) => v + 1);
       setBaseline(parsed);
       setLoadedName(file.name);
     } catch (e) {
@@ -582,6 +717,15 @@ export default function App() {
     const proc = config.processes.find((p) => p.id === selectedProc) || null;
     const { svg } = buildDiagramSvg(config, proc);
     download(`${exportName()}.svg`, svg, "image/svg+xml");
+  };
+
+  const exportHtml = () => {
+    const proc = config.processes.find((p) => p.id === selectedProc) || null;
+    download(
+      `${exportName()}${proc ? "-" + proc.id : ""}.html`,
+      buildStaticHtml(config, proc),
+      "text/html"
+    );
   };
 
   const exportPng = () => {
@@ -614,7 +758,10 @@ export default function App() {
 
   const revert = () => {
     if (window.confirm("Discard all changes since the last load/export?")) {
-      setConfig(baseline);
+      _setConfig(baseline);
+      undoRef.current = [];
+      redoRef.current = [];
+      setHistVer((v) => v + 1);
       setSelection(null);
       setBuilder(null);
       setSelectedProc(null);
@@ -680,6 +827,7 @@ export default function App() {
           minZoom={0.2}
           maxZoom={2.5}
           proOptions={{ hideAttribution: true }}
+          nodesDraggable={editing && !builder}
           nodesConnectable={editing && !builder}
           elementsSelectable={editing && !builder}
           selectionOnDrag={editing && !builder}
@@ -699,16 +847,59 @@ export default function App() {
             {selection.kind === "multi" ? (
               <>
                 <span className="sel-kind">selection</span>
-                <span className="sel-id">
-                  {selection.nodes.length + selection.edges.length + selection.groups.length} items
-                </span>
-                <button className="sel-delete" onClick={confirmDelete} title="Delete all selected (or press the Delete key)">
-                  Delete all
+                {[
+                  ["nodes", selection.nodes.length, "nodes"],
+                  ["edges", selection.edges.length, "edges"],
+                  ["groups", selection.groups.length, "containers"]
+                ]
+                  .filter(([, count]) => count > 0)
+                  .map(([key, count, label]) => (
+                    <label key={key} className="sel-check">
+                      <input
+                        type="checkbox"
+                        checked={selection.use[key]}
+                        onChange={() =>
+                          setSelection((s) => ({ ...s, use: { ...s.use, [key]: !s.use[key] } }))
+                        }
+                      />
+                      {count} {label}
+                    </label>
+                  ))}
+                <span className="sel-sep" />
+                <input
+                  className="sel-font"
+                  type="number" min="6" max="48" step="0.5"
+                  placeholder="font px"
+                  title="Font size to apply to the checked kinds (leave empty to reset to default)"
+                  value={bulkFont}
+                  onChange={(e) => setBulkFont(e.target.value)}
+                />
+                <button
+                  className="pp-mini"
+                  onClick={applyBulkFont}
+                  disabled={
+                    !effectiveMulti ||
+                    effectiveMulti.nodes.length + effectiveMulti.edges.length + effectiveMulti.groups.length === 0
+                  }
+                  title="Apply font size to checked kinds (empty = reset to default)"
+                >
+                  Apply font
+                </button>
+                <button
+                  className="sel-delete"
+                  onClick={confirmDelete}
+                  disabled={
+                    !effectiveMulti ||
+                    effectiveMulti.nodes.length + effectiveMulti.edges.length + effectiveMulti.groups.length === 0
+                  }
+                  title="Delete the checked kinds (or press the Delete key)"
+                >
+                  Delete
                 </button>
               </>
             ) : (
               <>
-                <span className="sel-kind">{selection.kind}</span>
+                <span className="sel-kind">{selection.kind === "group" ? "container" : selection.kind}</span>
                 <span className="sel-id">{selection.id}</span>
                 {selection.kind === "edge" && (
                   <button className="pp-mini" onClick={addWaypointAtMid} title="Add a routing point you can drag">
@@ -773,6 +964,15 @@ export default function App() {
           </div>
         </div>
 
+        <div className="hist-row">
+          <button className="pp-mini" onClick={undo} disabled={histVer >= 0 && undoRef.current.length === 0} title="Undo (Ctrl+Z)">
+            &#8630; undo
+          </button>
+          <button className="pp-mini" onClick={redo} disabled={histVer >= 0 && redoRef.current.length === 0} title="Redo (Ctrl+Shift+Z / Ctrl+Y)">
+            &#8631; redo
+          </button>
+        </div>
+
         <div className="mode-toggle" role="tablist">
           <button
             className={mode === "view" ? "on" : ""}
@@ -796,7 +996,7 @@ export default function App() {
         ) : (
           <>
             <div className="section-label">
-              Processes
+              Groups
               {editing && (
                 <button className="pp-mini" onClick={() => startBuilder(null)}>+ new</button>
               )}
@@ -819,9 +1019,9 @@ export default function App() {
                       <span className="process-tools">
                         <button className="pp-mini" title="Edit membership" onClick={() => startBuilder(p)}>✎</button>
                         <button
-                          className="pp-mini" title="Delete process"
+                          className="pp-mini" title="Delete group"
                           onClick={() => {
-                            if (window.confirm(`Delete process "${p.name}"?`)) {
+                            if (window.confirm(`Delete group "${p.name}"?`)) {
                               setConfig((c) => deleteProcess(c, p.id).cfg);
                               if (selectedProc === p.id) setSelectedProc(null);
                             }
@@ -845,6 +1045,7 @@ export default function App() {
             {editing && (
               <PropertiesPanel
                 cfg={config}
+                descendantGroups={descendantGroups}
                 selection={selection && selection.kind !== "multi" ? selection : null}
                 onRename={handleRename}
                 onPatch={handlePatch}
@@ -872,6 +1073,9 @@ export default function App() {
           </button>
           <button className="btn subtle" title="Save the diagram (with current highlight) as a scalable SVG" onClick={exportSvgFile}>
             SVG
+          </button>
+          <button className="btn subtle" title="Save a script-free HTML page of the current view with hover tooltips — safe for Confluence/SharePoint" onClick={exportHtml}>
+            HTML
           </button>
           <button className="btn subtle" title="Download the JSON Schema"
             onClick={() => download("diagram.schema.json", JSON.stringify(schema, null, 2))}>

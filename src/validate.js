@@ -77,6 +77,29 @@ export function validateConfig(cfg) {
       errors.push(`Node "${n.id}" references unknown group "${n.group}"${didYouMean(n.group, groupIds)}`);
   });
 
+  (cfg.groups || []).forEach((g) => {
+    if (g.group && !groupSet.has(g.group))
+      errors.push(`Group "${g.id}" references unknown parent group "${g.group}"${didYouMean(g.group, groupIds)}`);
+  });
+  {
+    const parent = Object.fromEntries((cfg.groups || []).map((g) => [g.id, g.group]));
+    const reported = new Set();
+    for (const g of cfg.groups || []) {
+      if (reported.has(g.id)) continue;
+      const seen = new Set([g.id]);
+      let cur = parent[g.id];
+      while (cur) {
+        if (seen.has(cur)) {
+          errors.push(`Group nesting cycle involving "${cur}" — a group cannot contain itself.`);
+          seen.forEach((x) => reported.add(x));
+          break;
+        }
+        seen.add(cur);
+        cur = parent[cur];
+      }
+    }
+  }
+
   cfg.edges.forEach((e) => {
     if (!nodeSet.has(e.source))
       errors.push(`Edge "${e.id}" source "${e.source}" is not a known node${didYouMean(e.source, nodeIds)}`);

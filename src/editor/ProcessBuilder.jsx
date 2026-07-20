@@ -8,7 +8,7 @@ export default function ProcessBuilder({ builder, setBuilder, cfg, onSave, onCan
   return (
     <div className="builder" style={{ "--pc": builder.color }}>
       <div className="builder-head">
-        {builder.origId ? "Edit process" : "New process"}
+        {builder.origId ? "Edit group" : "New group"}
       </div>
       <label className="pp-field">
         <span>name</span>
@@ -41,7 +41,7 @@ export default function ProcessBuilder({ builder, setBuilder, cfg, onSave, onCan
         <b>{builder.nodes.size}</b> node(s) · <b>{builder.edges.size}</b> edge(s) selected
       </div>
       <div className="builder-hint">
-        Click components and connections on the canvas to add or remove them from this process.
+        Click components and connections on the canvas to add or remove them from this group.
       </div>
       <button
         className="btn subtle builder-auto"
@@ -56,7 +56,7 @@ export default function ProcessBuilder({ builder, setBuilder, cfg, onSave, onCan
         Include all edges between selected nodes
       </button>
       <div className="builder-actions">
-        <button className="btn" disabled={!canSave} onClick={onSave}>Save process</button>
+        <button className="btn" disabled={!canSave} onClick={onSave}>Save group</button>
         <button className="btn subtle" onClick={onCancel}>Cancel</button>
       </div>
     </div>

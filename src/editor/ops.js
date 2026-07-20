@@ -33,14 +33,32 @@ export function slugId(name, existing) {
 
 /* ---- add ---------------------------------------------------------------- */
 
-function groupAt(cfg, pos) {
+function groupAt(cfg, pos, excludeId) {
+  /* innermost (smallest) group containing the point */
+  let best = null, bestArea = Infinity;
   for (const g of cfg.groups || []) {
+    if (g.id === excludeId) continue;
     if (
       pos.x >= g.position.x && pos.x <= g.position.x + g.size.w &&
       pos.y >= g.position.y && pos.y <= g.position.y + g.size.h
-    ) return g.id;
+    ) {
+      const area = g.size.w * g.size.h;
+      if (area < bestArea) { bestArea = area; best = g.id; }
+    }
   }
-  return null;
+  return best;
+}
+
+export function descendantGroups(cfg, gid) {
+  const out = [];
+  const stack = [gid];
+  while (stack.length) {
+    const cur = stack.pop();
+    for (const g of cfg.groups || []) {
+      if (g.group === cur && !out.includes(g.id)) { out.push(g.id); stack.push(g.id); }
+    }
+  }
+  return out;
 }
 
 export function addNode(cfg, type, pos) {
@@ -61,11 +79,14 @@ export function addGroup(cfg, pos) {
   const next = structuredClone(cfg);
   next.groups = next.groups || [];
   const id = nextId("grp", allIds(next).groups);
-  next.groups.push({
+  const g = {
     id, label: "New Group",
     position: { x: Math.round(pos.x), y: Math.round(pos.y) },
     size: { w: 340, h: 190 }
-  });
+  };
+  const parent = groupAt(next, pos);
+  if (parent) g.group = parent;
+  next.groups.push(g);
   return { cfg: next, id };
 }
 
@@ -100,7 +121,7 @@ export function deleteNode(cfg, id) {
     });
   const summary = [];
   if (removedEdges.length) summary.push(`${removedEdges.length} connected edge(s) will also be deleted`);
-  if (emptied.length) summary.push(`process(es) left empty and removed: ${emptied.join(", ")}`);
+  if (emptied.length) summary.push(`group(s) left empty and removed: ${emptied.join(", ")}`);
   return { cfg: next, summary };
 }
 
@@ -116,11 +137,16 @@ export function deleteEdge(cfg, id) {
 export function deleteGroup(cfg, id) {
   const next = structuredClone(cfg);
   next.groups = (next.groups || []).filter((g) => g.id !== id);
-  let freed = 0;
+  let freed = 0, freedGroups = 0;
   next.nodes.forEach((n) => {
     if (n.group === id) { delete n.group; freed++; }
   });
-  const summary = freed ? [`${freed} member node(s) will be ungrouped (kept on canvas)`] : [];
+  next.groups.forEach((g) => {
+    if (g.group === id) { delete g.group; freedGroups++; }
+  });
+  const summary = [];
+  if (freed) summary.push(`${freed} member node(s) will be released from the container (kept on canvas)`);
+  if (freedGroups) summary.push(`${freedGroups} child container(s) will be un-nested (kept on canvas)`);
   return { cfg: next, summary };
 }
 
@@ -141,6 +167,9 @@ export function deleteMany(cfg, sel) {
     next.nodes.forEach((n) => {
       if (n.group && groupSet.has(n.group)) { delete n.group; freed++; }
     });
+    next.groups.forEach((g) => {
+      if (g.group && groupSet.has(g.group)) delete g.group;
+    });
   }
   const emptied = [];
   next.processes = next.processes
@@ -156,8 +185,8 @@ export function deleteMany(cfg, sel) {
   const summary = [];
   const cascaded = removedEdges.filter((id) => !edgeSet.has(id)).length;
   if (cascaded) summary.push(`${cascaded} connected edge(s) will also be deleted`);
-  if (freed) summary.push(`${freed} member node(s) will be ungrouped (kept on canvas)`);
-  if (emptied.length) summary.push(`process(es) left empty and removed: ${emptied.join(", ")}`);
+  if (freed) summary.push(`${freed} member node(s) will be released from the container (kept on canvas)`);
+  if (emptied.length) summary.push(`group(s) left empty and removed: ${emptied.join(", ")}`);
   return { cfg: next, summary };
 }
 
@@ -177,8 +206,26 @@ export function applyGroupResize(cfg, groupId, p) {
   const next = structuredClone(cfg);
   const g = (next.groups || []).find((x) => x.id === groupId);
   if (!g) return cfg;
+  const base = g.group
+    ? (next.groups || []).find((x) => x.id === g.group)?.position || { x: 0, y: 0 }
+    : { x: 0, y: 0 };
   g.size = { w: Math.round(p.width), h: Math.round(p.height) };
-  g.position = { x: Math.round(p.x), y: Math.round(p.y) };
+  g.position = { x: Math.round(base.x + p.x), y: Math.round(base.y + p.y) };
+  return next;
+}
+
+export function setFontSizes(cfg, ids, size) {
+  const next = structuredClone(cfg);
+  const apply = (list, set) =>
+    list.forEach((el) => {
+      if (set.has(el.id)) {
+        if (size === null || size === undefined) delete el.fontSize;
+        else el.fontSize = size;
+      }
+    });
+  apply(next.nodes, new Set(ids.nodes || []));
+  apply(next.edges, new Set(ids.edges || []));
+  apply(next.groups || [], new Set(ids.groups || []));
   return next;
 }
 
@@ -217,6 +264,9 @@ export function renameId(cfg, kind, oldId, newId) {
     next.groups.find((g) => g.id === oldId).id = newId;
     next.nodes.forEach((n) => {
       if (n.group === oldId) n.group = newId;
+    });
+    next.groups.forEach((g) => {
+      if (g.group === oldId) g.group = newId;
     });
   } else if (kind === "process") {
     next.processes.find((p) => p.id === oldId).id = newId;

@@ -63,6 +63,10 @@
           "label": { "type": "string" },
           "position": { "$ref": "#/definitions/point" },
           "size": { "$ref": "#/definitions/size" },
+          "group": {
+            "$ref": "#/definitions/id",
+            "description": "Optional id of a parent group, allowing nested groups."
+          },
           "fontSize": { "type": "number", "minimum": 6, "maximum": 48 },
           "attrs": { "$ref": "#/definitions/attrs" }
         }
