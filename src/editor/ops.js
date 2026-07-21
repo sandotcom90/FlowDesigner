@@ -33,6 +33,46 @@ export function slugId(name, existing) {
 
 /* ---- add ---------------------------------------------------------------- */
 
+/* Port codes are a side letter plus an optional position percentage:
+   "r" = centre, "r25" = a quarter down the right edge, "t80", etc.
+   Legacy codes "t1"/"t3" (from the fixed 3-per-side layout) mean 25% / 75%. */
+export function portFraction(port) {
+  if (!port || port.length < 2) return 0.5;
+  const rest = port.slice(1);
+  if (rest === "1") return 0.25;
+  if (rest === "3") return 0.75;
+  const pct = Number(rest);
+  if (!isFinite(pct)) return 0.5;
+  return Math.min(0.98, Math.max(0.02, pct / 100));
+}
+
+export const PORT_SIDES = ["t", "r", "b", "l"];
+export const SIDE_NAME = { t: "top", r: "right", b: "bottom", l: "left" };
+export const DEFAULT_PORTS = 3;
+export const MAX_PORTS = 9;
+
+export function portCount(node) {
+  const n = Number(node?.ports);
+  return Number.isInteger(n) && n >= 1 && n <= MAX_PORTS ? n : DEFAULT_PORTS;
+}
+
+/* n evenly spaced points per side; the middle one keeps the bare side code */
+export function portCodesForSide(side, n) {
+  const out = [];
+  for (let i = 1; i <= n; i++) {
+    const pct = Math.round((i / (n + 1)) * 100);
+    out.push({ code: pct === 50 ? side : `${side}${pct}`, pct });
+  }
+  return out;
+}
+
+export function portsOfNode(node) {
+  const n = portCount(node);
+  return PORT_SIDES.flatMap((side) =>
+    portCodesForSide(side, n).map((p) => ({ ...p, side }))
+  );
+}
+
 export function isPoly(g) {
   return Array.isArray(g.points) && g.points.length >= 3;
 }
@@ -323,7 +363,7 @@ export function anchorOf(cfg, nodeId, port) {
   const { w, h } = nodeSize(n);
   const { x, y } = n.position;
   const side = port ? port[0] : "r";
-  const f = port && port[1] === "1" ? 0.25 : port && port[1] === "3" ? 0.75 : 0.5;
+  const f = portFraction(port);
   switch (side) {
     case "t": return { x: x + w * f, y };
     case "b": return { x: x + w * f, y: y + h };

@@ -1,6 +1,6 @@
 import React from "react";
 import { Handle, Position, NodeResizer, useReactFlow } from "@xyflow/react";
-import { labelAnchor } from "./editor/ops";
+import { labelAnchor, portsOfNode } from "./editor/ops";
 
 export const DEFAULT_SIZE = { w: 150, h: 66 };
 export const TYPE_SIZE = { database: { w: 120, h: 92 } };
@@ -18,20 +18,23 @@ const SIDES = [
   ["l", Position.Left]
 ];
 
-/* three points per side: 25% / 50% / 75% */
-const PORT_DEFS = SIDES.flatMap(([side, pos]) => {
-  const horiz = side === "t" || side === "b";
-  return [
-    [`${side}1`, pos, { [horiz ? "left" : "top"]: "25%" }],
-    [side, pos, {}],
-    [`${side}3`, pos, { [horiz ? "left" : "top"]: "75%" }]
-  ];
-});
+const POS_BY_SIDE = Object.fromEntries(SIDES);
 
-function Ports({ editable }) {
+function Ports({ editable, ports }) {
+  const defs = React.useMemo(() => {
+    return portsOfNode({ ports }).map(({ code, side, pct }) => {
+      const horiz = side === "t" || side === "b";
+      return [
+        code,
+        POS_BY_SIDE[side],
+        pct === 50 ? {} : { [horiz ? "left" : "top"]: `${pct}%` }
+      ];
+    });
+  }, [ports]);
+
   return (
     <>
-      {PORT_DEFS.map(([id, pos, style]) => (
+      {defs.map(([id, pos, style]) => (
         <React.Fragment key={id}>
           <Handle
             type="target" id={`t-${id}`} position={pos} style={style}
@@ -160,7 +163,7 @@ export function ShapeNode({ data, selected, width, height }) {
       >
         {data.label}
       </div>
-      <Ports editable={data.editable} />
+      <Ports editable={data.editable} ports={data.ports} />
     </div>
   );
 }

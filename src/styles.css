@@ -844,3 +844,16 @@ html, body, #root {
 .group-label-grab { cursor: grab; pointer-events: all; touch-action: none; }
 .group-label-grab:active { cursor: grabbing; }
 .group-label-grab:hover { color: var(--accent); }
+
+.pp-step { display: flex; align-items: center; gap: 6px; }
+.pp-step input {
+  flex: 1; min-width: 0; text-align: center;
+  padding: 5px 4px; border: 1.5px solid var(--rule); border-radius: 6px;
+  font-family: var(--mono); font-size: 12px;
+}
+.pp-step input:focus { outline: none; border-color: var(--accent); }
+.pp-step .pp-mini { flex: 0 0 30px; padding: 5px 0; font-size: 14px; line-height: 1; }
+.pp-note {
+  margin: -4px 0 10px;
+  font-family: var(--mono); font-size: 10.5px; color: var(--ink-soft);
+}

@@ -38,7 +38,8 @@
     },
     "port": {
       "type": "string",
-      "enum": ["t", "t1", "t3", "r", "r1", "r3", "b", "b1", "b3", "l", "l1", "l3"],
+      "pattern": "^[trbl]([0-9]{1,2})?$",
+      "description": "Side letter plus an optional position percentage along that side, e.g. r, r25, t80.",
       "description": "Side of the node the edge attaches to: top, right, bottom, left."
     }
   },
@@ -106,6 +107,12 @@
           },
           "size": { "$ref": "#/definitions/size" },
           "fontSize": { "type": "number", "minimum": 6, "maximum": 48 },
+          "ports": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9,
+            "description": "Connection points per side (default 3), spaced evenly along each edge of the shape."
+          },
           "attrs": { "$ref": "#/definitions/attrs" }
         }
       }

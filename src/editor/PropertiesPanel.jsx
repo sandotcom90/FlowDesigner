@@ -1,5 +1,25 @@
 import React, { useEffect, useState } from "react";
-import { NODE_TYPES, TYPE_LABEL, coerceAttr } from "./ops";
+import {
+  NODE_TYPES, TYPE_LABEL, coerceAttr,
+  portsOfNode, portCount, portFraction, SIDE_NAME, MAX_PORTS
+} from "./ops";
+
+/* Ports offered for one end of an edge, based on that component's own count.
+   A port already in the JSON that no longer lines up stays listed so nothing
+   is silently lost. */
+function portOptions(cfg, nodeId, current) {
+  const node = cfg.nodes.find((n) => n.id === nodeId);
+  const list = portsOfNode(node || {}).map(({ code, side, pct }) => [
+    code,
+    pct === 50 ? SIDE_NAME[side] : `${SIDE_NAME[side]} ${pct}%`
+  ]);
+  if (current && !list.some(([c]) => c === current))
+    list.push([
+      current,
+      `${SIDE_NAME[current[0]] || current[0]} ${Math.round(portFraction(current) * 100)}% (custom)`
+    ]);
+  return list;
+}
 
 function Field({ label, children }) {
   return (
@@ -81,13 +101,6 @@ function AttrsEditor({ attrs, onChange, idKey }) {
   );
 }
 
-const PORTS = [
-  ["t1", "top-left"], ["t", "top"], ["t3", "top-right"],
-  ["r1", "right-top"], ["r", "right"], ["r3", "right-bottom"],
-  ["b1", "bottom-left"], ["b", "bottom"], ["b3", "bottom-right"],
-  ["l1", "left-top"], ["l", "left"], ["l3", "left-bottom"]
-];
-
 export default function PropertiesPanel({ cfg, selection, onRename, onPatch, onDelete, onClearWaypoints, onReverse, descendantGroups }) {
   if (!selection) return null;
   const { kind, id } = selection;
@@ -132,6 +145,43 @@ export default function PropertiesPanel({ cfg, selection, onRename, onPatch, onD
               ))}
             </select>
           </Field>
+          <Field label="connect points per side">
+            <div className="pp-step">
+              <button
+                type="button" className="pp-mini"
+                title="Remove a connection point from every side"
+                disabled={portCount(el) <= 1}
+                onClick={() => {
+                  const v = portCount(el) - 1;
+                  onPatch({ ports: v === 3 ? undefined : v });
+                }}
+              >
+                &#8722;
+              </button>
+              <input
+                type="number" min="1" max={MAX_PORTS} step="1"
+                value={portCount(el)}
+                onChange={(e) => {
+                  const v = Math.max(1, Math.min(MAX_PORTS, Number(e.target.value) || 1));
+                  onPatch({ ports: v === 3 ? undefined : v });
+                }}
+              />
+              <button
+                type="button" className="pp-mini"
+                title="Add a connection point to every side"
+                disabled={portCount(el) >= MAX_PORTS}
+                onClick={() => {
+                  const v = portCount(el) + 1;
+                  onPatch({ ports: v === 3 ? undefined : v });
+                }}
+              >
+                +
+              </button>
+            </div>
+          </Field>
+          <p className="pp-note">
+            {portCount(el) * 4} points total &#183; evenly spaced along each side
+          </p>
         </>
       )}
 
@@ -160,12 +210,12 @@ export default function PropertiesPanel({ cfg, selection, onRename, onPatch, onD
           <div className="pp-two">
             <Field label="from side">
               <select value={el.sourcePort || "r"} onChange={(e) => onPatch({ sourcePort: e.target.value })}>
-                {PORTS.map(([v, n]) => <option key={v} value={v}>{n}</option>)}
+                {portOptions(cfg, el.source, el.sourcePort).map(([v, n]) => <option key={v} value={v}>{n}</option>)}
               </select>
             </Field>
             <Field label="to side">
               <select value={el.targetPort || "l"} onChange={(e) => onPatch({ targetPort: e.target.value })}>
-                {PORTS.map(([v, n]) => <option key={v} value={v}>{n}</option>)}
+                {portOptions(cfg, el.target, el.targetPort).map(([v, n]) => <option key={v} value={v}>{n}</option>)}
               </select>
             </Field>
           </div>

@@ -131,7 +131,7 @@ function toFlow(cfg, opts) {
       ...(n.group ? { parentId: n.group } : {}),
       data: {
         label: n.label, shape: n.type, attrs: n.attrs, size, cfgType: n.type,
-        fontSize: n.fontSize,
+        fontSize: n.fontSize, ports: n.ports,
         editable: editing && !builder,
         onResizeEnd: (p) => rsHandlers.node(n.id, p)
       },
