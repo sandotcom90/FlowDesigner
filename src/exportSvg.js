@@ -6,6 +6,42 @@ const POS = { t: Position.Top, r: Position.Right, b: Position.Bottom, l: Positio
 const GRAY = "#5b6470";
 const PAPER = "#f2f3ee";
 
+/* SVG <text> never wraps, so labels are split into tspans here. Monospace
+   glyphs are ~0.6em wide, which makes the fit predictable without measuring. */
+function wrapLines(text, fontSize, maxWidth) {
+  const raw = String(text ?? "").split(/\r?\n/);
+  if (!maxWidth || maxWidth <= 0) return raw;
+  const maxChars = Math.max(4, Math.floor(maxWidth / (fontSize * 0.6)));
+  const out = [];
+  raw.forEach((para) => {
+    if (para.length <= maxChars) { out.push(para); return; }
+    let line = "";
+    para.split(/\s+/).filter(Boolean).forEach((word) => {
+      while (word.length > maxChars) {
+        if (line) { out.push(line); line = ""; }
+        out.push(word.slice(0, maxChars - 1) + "\u2010");
+        word = word.slice(maxChars - 1);
+      }
+      if (!line) line = word;
+      else if ((line + " " + word).length <= maxChars) line += " " + word;
+      else { out.push(line); line = word; }
+    });
+    if (line) out.push(line);
+  });
+  return out.length ? out : [""];
+}
+
+function tspans(lines, x, fontSize) {
+  const lh = fontSize * 1.25;
+  const start = -((lines.length - 1) / 2) * lh;
+  return lines
+    .map(
+      (l, i) =>
+        `<tspan x="${x}" dy="${i === 0 ? start.toFixed(1) : lh.toFixed(1)}">${esc(l)}</tspan>`
+    )
+    .join("");
+}
+
 function tooltipText(label, kindName, attrs) {
   const lines = [`${label} — ${kindName}`];
   Object.entries(attrs || {}).forEach(([k, v]) => lines.push(`${k}: ${v}`));
@@ -93,7 +129,14 @@ function membershipMaps(cfg) {
   const add = (m, id, pid) => ((m[id] = m[id] || []).push(pid));
   cfg.processes.forEach((p) => {
     p.nodes.forEach((n) => add(nodeP, n, p.id));
-    (p.edges || []).forEach((e) => add(edgeP, e, p.id));
+    /* mirror the live view: with no explicit edge list, any link whose both
+       ends are in the group counts as part of it */
+    const list =
+      p.edges ||
+      cfg.edges
+        .filter((e) => p.nodes.includes(e.source) && p.nodes.includes(e.target))
+        .map((e) => e.id);
+    list.forEach((e) => add(edgeP, e, p.id));
   });
   (cfg.groups || []).forEach((g) => {
     const tree = new Set([g.id]);
@@ -197,7 +240,11 @@ export function buildDiagramSvg(cfg, proc, opts = {}) {
       edgeLabelParts.push(
         `<text x="${lx}" y="${ly}" class="elabel${inter ? ` el${pcls(maps.edgeP, e.id)}` : ""}" text-anchor="middle" dominant-baseline="central"${
           e.fontSize ? ` font-size="${e.fontSize}px"` : ""
-        }${lit ? ` fill="${color}"` : ""}${dim ? ' opacity="0.14"' : ""}>${esc(e.label)}</text>`
+        }${lit ? ` fill="${color}"` : ""}${dim ? ' opacity="0.14"' : ""}>${
+          String(e.label).includes("\n")
+            ? tspans(String(e.label).split(/\r?\n/), lx, e.fontSize || 10.5)
+            : esc(e.label)
+        }</text>`
       );
     }
   });
@@ -244,9 +291,16 @@ ${
       }
 ${(() => {
         const a = labelAnchor(g);
+        const gfs = g.fontSize || 10.5;
+        const gw = a.center ? (a.width ? a.width - 10 : g.size.w - 16) : g.size.w - 24;
+        const glines = wrapLines(g.label.toUpperCase(), gfs * 1.15, gw);
         return `<text x="${g.position.x + a.x}" y="${g.position.y + a.y}" class="glabel"${
           a.center ? ' text-anchor="middle" dominant-baseline="central"' : ""
-        }${g.fontSize ? ` font-size="${g.fontSize}px"` : ""}>${esc(g.label.toUpperCase())}</text>`;
+        }${g.fontSize ? ` font-size="${g.fontSize}px"` : ""}>${
+          glines.length > 1
+            ? tspans(glines, g.position.x + a.x, gfs)
+            : esc(g.label.toUpperCase())
+        }</text>`;
       })()}
 </g>`;
     });
@@ -265,7 +319,11 @@ ${(() => {
     }>
 <title>${esc(tt)}</title>
 ${shapeMarkup(n.type, w, h)}
-<text x="${w / 2 + dx}" y="${h / 2 + dy}" class="nlabel" text-anchor="middle" dominant-baseline="central"${n.fontSize ? ` font-size="${n.fontSize}px"` : ""}>${esc(n.label)}</text>
+<text x="${w / 2 + dx}" y="${h / 2 + dy}" class="nlabel" text-anchor="middle" dominant-baseline="central"${n.fontSize ? ` font-size="${n.fontSize}px"` : ""}>${tspans(
+      wrapLines(n.label, n.fontSize || 12.5, w - 18 - Math.abs(dx) * 2),
+      w / 2 + dx,
+      n.fontSize || 12.5
+    )}</text>
 </g>`;
   });
 
@@ -355,13 +413,19 @@ export function buildStaticHtml(cfg, proc) {
     .map((p) => {
       const c = p.color || "#2563eb";
       const m = procMarkers[p.id];
+      const S = `#r-${p.id}:checked ~ .wrap main svg`;
       return `
-#r-${p.id}:checked ~ .wrap main svg .el:not(.p-${p.id}){opacity:.12;filter:grayscale(.85)}
-#r-${p.id}:checked ~ .wrap main svg g.edge.p-${p.id} path.vis{stroke:${c};stroke-width:2.6;marker-end:url(#${m})}
-#r-${p.id}:checked ~ .wrap main svg g.edge.p-${p.id}.two path.vis{marker-start:url(#${m})}
-#r-${p.id}:checked ~ .wrap main svg text.elabel.p-${p.id}{fill:${c};opacity:1}
-#r-${p.id}:checked ~ .wrap main svg g.node.p-${p.id}{filter:url(#litshadow)}
-#r-${p.id}:checked ~ .wrap aside label[for=r-${p.id}]{font-weight:bold;border-color:currentColor;background:#fff}`;
+${S} .el:not(.p-${p.id}){opacity:.12;filter:grayscale(.85)}
+${S} g.node.p-${p.id} .shape,${S} g.node.p-${p.id} .stroke,${S} g.node.p-${p.id} .glyph{stroke:${c}}
+${S} g.node.p-${p.id} .shape{stroke-width:2.5}
+${S} g.node.p-${p.id} .dot{fill:${c}}
+${S} g.node.p-${p.id} .nlabel{font-weight:600;fill:${c}}
+${S} g.node.p-${p.id}{filter:url(#litshadow)}
+${S} g.edge.p-${p.id} path.vis{stroke:${c};stroke-width:2.6;marker-end:url(#${m})}
+${S} g.edge.p-${p.id}.two path.vis{marker-start:url(#${m})}
+${S} text.elabel.p-${p.id}{fill:${c};font-weight:600}
+${S} g.grp.p-${p.id} polygon,${S} g.grp.p-${p.id} rect{stroke:${c}}
+#r-${p.id}:checked ~ .wrap aside label[for=r-${p.id}]{font-weight:bold;border-color:${c};background:#fff;box-shadow:inset 3px 0 0 ${c}}`;
     })
     .join("\n");
 
@@ -400,6 +464,13 @@ aside .sec+.sec{margin-top:18px}
 #r-none:checked ~ .wrap aside label.all{font-weight:bold;background:#fff;border-color:currentColor}
 #z-fit:checked ~ .wrap aside label[for=z-fit]{font-weight:bold;background:#fff;border-color:currentColor}
 footer{padding:8px 20px;font-size:11px;color:#5b6470;border-top:1px solid #c9cdc4;background:#fafaf7;flex:0 0 auto}
+.zoombox{display:none;margin-bottom:18px}
+body.js .zoombox{display:block}
+body.js .zooms{display:none}
+#zslider{width:100%;margin:0 0 6px}
+.zval{display:flex;justify-content:space-between;align-items:center;font-size:11px;color:#5b6470}
+.zval button{font:inherit;cursor:pointer;border:1.5px solid #c9cdc4;border-radius:6px;background:#fff;padding:2px 8px}
+body.js main svg{width:var(--zw,100%);max-width:none}
 ${procRules}
 ${zoomRules}
 </style>
@@ -413,10 +484,35 @@ ${radios}
 <p class="sec">Groups</p>
 <div class="groups">${groupChips}</div>
 <p class="sec">Zoom</p>
+<div class="zoombox">
+  <input type="range" id="zslider" min="25" max="400" step="5" value="100" aria-label="Zoom">
+  <div class="zval"><span id="zout">fit width</span><button type="button" id="zreset">reset</button></div>
+</div>
 <div class="zooms">${zoomChips}</div>
 </aside>
 </div>
-<footer>rev ${esc(cfg.meta?.version || "\u2014")} \u00b7 ${cfg.nodes.length} nodes \u00b7 ${cfg.edges.length} links \u00b7 click a group to highlight its path \u00b7 zoom in, then scroll the canvas to pan \u00b7 hover any element for details</footer>
+<script>
+(function () {
+  var b = document.body, s = document.getElementById("zslider"),
+      o = document.getElementById("zout"), r = document.getElementById("zreset"),
+      base = ${Math.round(width)};
+  if (!s) return;
+  b.className += " js";
+  function apply() {
+    var pct = +s.value;
+    b.style.setProperty("--zw", Math.round(base * pct / 100) + "px");
+    o.textContent = pct + "%";
+  }
+  s.addEventListener("input", apply);
+  r.addEventListener("click", function () {
+    b.style.removeProperty("--zw");
+    s.value = 100;
+    o.textContent = "fit width";
+  });
+  b.style.removeProperty("--zw");
+})();
+</script>
+<footer>rev ${esc(cfg.meta?.version || "\u2014")} \u00b7 ${cfg.nodes.length} nodes \u00b7 ${cfg.edges.length} links \u00b7 click a group to highlight its path \u00b7 drag the zoom slider, then scroll the canvas to pan \u00b7 hover any element for details</footer>
 </body>
 </html>
 `;

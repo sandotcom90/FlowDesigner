@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import {
   NODE_TYPES, TYPE_LABEL, coerceAttr,
-  portsOfNode, portCount, portFraction, SIDE_NAME, MAX_PORTS
+  portsOfNode, portsForNode, portCount, portFraction, SIDE_NAME, MAX_PORTS
 } from "./ops";
 
 /* Ports offered for one end of an edge, based on that component's own count.
@@ -9,9 +9,9 @@ import {
    is silently lost. */
 function portOptions(cfg, nodeId, current) {
   const node = cfg.nodes.find((n) => n.id === nodeId);
-  const list = portsOfNode(node || {}).map(({ code, side, pct }) => [
+  const list = portsForNode(cfg, node).map(({ code, side, pct, kept }) => [
     code,
-    pct === 50 ? SIDE_NAME[side] : `${SIDE_NAME[side]} ${pct}%`
+    `${pct === 50 ? SIDE_NAME[side] : `${SIDE_NAME[side]} ${pct}%`}${kept ? " (in use)" : ""}`
   ]);
   if (current && !list.some(([c]) => c === current))
     list.push([

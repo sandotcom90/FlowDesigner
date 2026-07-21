@@ -73,6 +73,28 @@ export function portsOfNode(node) {
   );
 }
 
+/* Every port a component must expose: the evenly spaced set it is configured
+   for, plus any port an existing edge already lands on. Without the second
+   half, raising or lowering the count would orphan those edges. */
+export function portsForNode(cfg, node) {
+  if (!node) return [];
+  const base = portsOfNode(node);
+  const seen = new Set(base.map((p) => p.code));
+  const extra = [];
+  const add = (code) => {
+    if (!code || seen.has(code)) return;
+    const side = code[0];
+    if (!PORT_SIDES.includes(side)) return;
+    seen.add(code);
+    extra.push({ code, side, pct: Math.round(portFraction(code) * 100), kept: true });
+  };
+  (cfg?.edges || []).forEach((e) => {
+    if (e.source === node.id) add(e.sourcePort || "r");
+    if (e.target === node.id) add(e.targetPort || "l");
+  });
+  return [...base, ...extra];
+}
+
 export function isPoly(g) {
   return Array.isArray(g.points) && g.points.length >= 3;
 }

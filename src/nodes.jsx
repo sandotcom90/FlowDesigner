@@ -20,9 +20,10 @@ const SIDES = [
 
 const POS_BY_SIDE = Object.fromEntries(SIDES);
 
-function Ports({ editable, ports }) {
+function Ports({ editable, portDefs, ports }) {
   const defs = React.useMemo(() => {
-    return portsOfNode({ ports }).map(({ code, side, pct }) => {
+    const list = portDefs && portDefs.length ? portDefs : portsOfNode({ ports });
+    return list.map(({ code, side, pct }) => {
       const horiz = side === "t" || side === "b";
       return [
         code,
@@ -30,7 +31,7 @@ function Ports({ editable, ports }) {
         pct === 50 ? {} : { [horiz ? "left" : "top"]: `${pct}%` }
       ];
     });
-  }, [ports]);
+  }, [portDefs, ports]);
 
   return (
     <>
@@ -163,7 +164,7 @@ export function ShapeNode({ data, selected, width, height }) {
       >
         {data.label}
       </div>
-      <Ports editable={data.editable} ports={data.ports} />
+      <Ports editable={data.editable} portDefs={data.portDefs} ports={data.ports} />
     </div>
   );
 }

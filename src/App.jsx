@@ -18,7 +18,7 @@ import {
   addNode, addGroup, addEdge, deleteNode, deleteEdge, deleteGroup, deleteProcess,
   renameId, updateElement, insertWaypoint, insertWaypointAt, moveWaypoint, removeWaypoint,
   reverseEdge, deleteMany, applyNodeResize, applyGroupResize, setFontSizes, reparentByPosition,
-  addPolyGroup, wrapSelection, setLabelPos,
+  addPolyGroup, wrapSelection, setLabelPos, portsForNode,
   descendantGroups, allIds, slugId, edgePoints, TYPE_LABEL
 } from "./editor/ops";
 
@@ -131,7 +131,7 @@ function toFlow(cfg, opts) {
       ...(n.group ? { parentId: n.group } : {}),
       data: {
         label: n.label, shape: n.type, attrs: n.attrs, size, cfgType: n.type,
-        fontSize: n.fontSize, ports: n.ports,
+        fontSize: n.fontSize, ports: n.ports, portDefs: portsForNode(cfg, n),
         editable: editing && !builder,
         onResizeEnd: (p) => rsHandlers.node(n.id, p)
       },
