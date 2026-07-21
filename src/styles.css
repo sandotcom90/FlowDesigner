@@ -800,17 +800,47 @@ html, body, #root {
   vector-effect: non-scaling-stroke;
   stroke-linejoin: round;
 }
-.selected .grp-poly, .group-node-poly:hover .grp-poly { stroke: var(--accent); }
-.gv-dot, .gv-ghost {
-  position: absolute;
-  width: 12px; height: 12px;
-  margin: -6px 0 0 -6px;
-  border-radius: 50%;
-  cursor: grab;
-  touch-action: none;
-  z-index: 5;
+.selected .grp-poly { stroke: var(--accent); stroke-width: 2.5; }
+
+.canvas-pane.drawing { cursor: crosshair; }
+.canvas-pane.drawing .react-flow__pane,
+.canvas-pane.drawing .react-flow__node { cursor: crosshair !important; }
+.dp-line { fill: none; stroke: var(--accent); stroke-width: 2; stroke-dasharray: 6 4; vector-effect: non-scaling-stroke; }
+.dp-fill { fill: rgba(37, 99, 235, 0.1); stroke: none; }
+.dp-pt { fill: #fff; stroke: var(--accent); stroke-width: 2; vector-effect: non-scaling-stroke; }
+.dp-start { fill: #fff; stroke: var(--accent); stroke-width: 2.5; vector-effect: non-scaling-stroke; }
+.dp-start.dp-near { fill: var(--accent); }
+.palette-armed {
+  border-color: var(--accent) !important;
+  background: rgba(37, 99, 235, 0.12) !important;
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.25);
 }
-.gv-dot { background: var(--accent); border: 2px solid #fff; box-shadow: 0 1px 3px rgba(0,0,0,.3); }
-.gv-dot:active { cursor: grabbing; }
-.gv-ghost { background: transparent; border: 2px dashed var(--accent); opacity: .55; }
-.gv-ghost:hover { opacity: 1; background: rgba(37, 99, 235, .15); }
+.draw-hint {
+  position: absolute;
+  top: 14px; left: 50%;
+  transform: translateX(-50%);
+  z-index: 60;
+  background: var(--paper);
+  border: 2px solid var(--accent);
+  border-radius: 8px;
+  padding: 7px 14px;
+  font-family: var(--mono);
+  font-size: 11.5px;
+  box-shadow: 0 3px 10px rgba(0,0,0,.16);
+  display: flex; align-items: center; gap: 12px;
+}
+.draw-hint b { color: var(--accent); }
+
+.group-label-in {
+  top: auto; left: auto;
+  transform: translate(-50%, -50%);
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  pointer-events: none;
+}
+
+.group-label-grab { cursor: grab; pointer-events: all; touch-action: none; }
+.group-label-grab:active { cursor: grabbing; }
+.group-label-grab:hover { color: var(--accent); }

@@ -443,31 +443,88 @@ function normalizePoly(g) {
   };
 }
 
-export function moveVertex(cfg, gid, i, relPt) {
+
+
+
+/* Where a container's label should sit.
+   Rectangles keep the top-left header slot. Drawn loops get an anchor on the
+   widest interior span near the top of the outline, so the text always lands
+   inside the shape (an L-shape's bbox corner is outside it). */
+export function labelAnchor(g) {
+  if (g.labelPos) return { x: g.labelPos.x, y: g.labelPos.y, center: true, width: 0 };
+  if (!isPoly(g)) return { x: 12, y: 14, center: false };
+  const pts = g.points;
+  const maxY = Math.max(...pts.map((p) => p.y));
+  const h = maxY || 1;
+
+  const widestSpanAt = (y) => {
+    const xs = [];
+    for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+      const a = pts[i], b = pts[j];
+      if (a.y > y !== b.y > y) xs.push(((b.x - a.x) * (y - a.y)) / (b.y - a.y) + a.x);
+    }
+    xs.sort((p, q) => p - q);
+    let best = null;
+    for (let k = 0; k + 1 < xs.length; k += 2) {
+      const w = xs[k + 1] - xs[k];
+      if (!best || w > best.w) best = { x: (xs[k] + xs[k + 1]) / 2, w };
+    }
+    return best;
+  };
+
+  for (const frac of [0.08, 0.15, 0.25, 0.4, 0.5, 0.65]) {
+    const y = Math.max(9, h * frac);
+    if (y >= maxY) break;
+    const s = widestSpanAt(y);
+    if (s && s.w >= 30)
+      return { x: Math.round(s.x), y: Math.round(y), center: true, width: Math.round(s.w) };
+  }
+  const cx = pts.reduce((t, p) => t + p.x, 0) / pts.length;
+  const cy = pts.reduce((t, p) => t + p.y, 0) / pts.length;
+  return { x: Math.round(cx), y: Math.round(cy), center: true, width: 0 };
+}
+
+/* Move a container's label; the point is relative to the container origin
+   and is clamped to its bounding box. Pass null to restore the default slot. */
+export function setLabelPos(cfg, gid, pt) {
   const next = structuredClone(cfg);
   const g = (next.groups || []).find((x) => x.id === gid);
-  if (!g || !isPoly(g) || !g.points[i]) return cfg;
-  g.points[i] = { x: Math.round(relPt.x), y: Math.round(relPt.y) };
-  normalizePoly(g);
+  if (!g) return cfg;
+  if (!pt) delete g.labelPos;
+  else
+    g.labelPos = {
+      x: Math.round(Math.max(0, Math.min(g.size.w, pt.x))),
+      y: Math.round(Math.max(0, Math.min(g.size.h, pt.y)))
+    };
   return next;
 }
 
-export function insertVertexAt(cfg, gid, i, relPt) {
+/* Create a container from a drawn closed loop of absolute canvas points. */
+export function addPolyGroup(cfg, absPts) {
   const next = structuredClone(cfg);
-  const g = (next.groups || []).find((x) => x.id === gid);
-  if (!g || !isPoly(g)) return cfg;
-  g.points.splice(i + 1, 0, { x: Math.round(relPt.x), y: Math.round(relPt.y) });
+  next.groups = next.groups || [];
+  const id = nextId("grp", allIds(next).groups);
+  const g = {
+    id,
+    label: "New Container",
+    position: { x: 0, y: 0 },
+    size: { w: 0, h: 0 },
+    points: absPts.map((p) => ({ x: p.x, y: p.y }))
+  };
   normalizePoly(g);
-  return next;
-}
+  const parent = groupAt(next, {
+    x: g.position.x + g.size.w / 2,
+    y: g.position.y + g.size.h / 2
+  });
+  if (parent) g.group = parent;
+  next.groups.push(g);
 
-export function removeVertex(cfg, gid, i) {
-  const next = structuredClone(cfg);
-  const g = (next.groups || []).find((x) => x.id === gid);
-  if (!g || !isPoly(g) || g.points.length <= 3) return cfg;
-  g.points.splice(i, 1);
-  normalizePoly(g);
-  return next;
+  /* components whose centers fall inside the loop become members */
+  next.nodes.forEach((n) => {
+    const s = nodeSize(n);
+    if (insideContainer(g, { x: n.position.x + s.w / 2, y: n.position.y + s.h / 2 })) n.group = id;
+  });
+  return { cfg: next, id };
 }
 
 /* Convex hull (monotone chain) of padded node corners -> polygon container

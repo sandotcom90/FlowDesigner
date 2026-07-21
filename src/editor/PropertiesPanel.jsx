@@ -209,33 +209,16 @@ export default function PropertiesPanel({ cfg, selection, onRename, onPatch, onD
         </Field>
       )}
 
-      {kind === "group" && (
+      {kind === "group" && (el.points || el.labelPos) && (
         <div className="pp-wp">
-          {el.points ? (
-            <>
-              <span>polygon &#183; {el.points.length} corners</span>
-              <button className="pp-mini" onClick={() => onPatch({ points: undefined })}>
-                back to rectangle
-              </button>
-            </>
-          ) : (
-            <>
-              <span>rectangle</span>
-              <button
-                className="pp-mini"
-                title="Turn this container into an editable polygon — drag the corner dots to bend it"
-                onClick={() =>
-                  onPatch({
-                    points: [
-                      { x: 0, y: 0 }, { x: el.size.w, y: 0 },
-                      { x: el.size.w, y: el.size.h }, { x: 0, y: el.size.h }
-                    ]
-                  })
-                }
-              >
-                convert to polygon
-              </button>
-            </>
+          <span>
+            {el.points ? `drawn outline \u00b7 ${el.points.length} points` : "rectangle"}
+            {el.labelPos ? " \u00b7 label moved" : ""}
+          </span>
+          {el.labelPos && (
+            <button className="pp-mini" onClick={() => onPatch({ labelPos: undefined })}>
+              reset label
+            </button>
           )}
         </div>
       )}

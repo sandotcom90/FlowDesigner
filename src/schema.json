@@ -67,6 +67,10 @@
             "$ref": "#/definitions/id",
             "description": "Optional id of a parent group, allowing nested groups."
           },
+          "labelPos": {
+            "$ref": "#/definitions/point",
+            "description": "Optional label position relative to the container origin. Omit for the default header slot."
+          },
           "points": {
             "type": "array",
             "description": "Optional polygon outline (vertices relative to position). When present the container is a polygon instead of a rectangle; size should be its bounding box.",

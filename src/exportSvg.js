@@ -1,6 +1,6 @@
 import { getSmoothStepPath, Position } from "@xyflow/react";
 import { nodeSize } from "./nodes";
-import { anchorOf, TYPE_LABEL } from "./editor/ops";
+import { anchorOf, TYPE_LABEL, labelAnchor } from "./editor/ops";
 
 const POS = { t: Position.Top, r: Position.Right, b: Position.Bottom, l: Position.Left };
 const GRAY = "#5b6470";
@@ -242,7 +242,12 @@ ${
           ? `<polygon points="${g.points.map((p) => `${g.position.x + p.x},${g.position.y + p.y}`).join(" ")}" fill="rgba(255,255,255,0.35)" stroke="#9aa2ad" stroke-width="1.5" stroke-linejoin="round"/>`
           : `<rect x="${g.position.x}" y="${g.position.y}" width="${g.size.w}" height="${g.size.h}" rx="10" fill="rgba(255,255,255,0.35)" stroke="#9aa2ad" stroke-width="1.5"/>`
       }
-<text x="${g.position.x + 12}" y="${g.position.y + 14}" class="glabel"${g.fontSize ? ` font-size="${g.fontSize}px"` : ""}>${esc(g.label.toUpperCase())}</text>
+${(() => {
+        const a = labelAnchor(g);
+        return `<text x="${g.position.x + a.x}" y="${g.position.y + a.y}" class="glabel"${
+          a.center ? ' text-anchor="middle" dominant-baseline="central"' : ""
+        }${g.fontSize ? ` font-size="${g.fontSize}px"` : ""}>${esc(g.label.toUpperCase())}</text>`;
+      })()}
 </g>`;
     });
 

@@ -1,5 +1,6 @@
 import React from "react";
 import { Handle, Position, NodeResizer, useReactFlow } from "@xyflow/react";
+import { labelAnchor } from "./editor/ops";
 
 export const DEFAULT_SIZE = { w: 150, h: 66 };
 export const TYPE_SIZE = { database: { w: 120, h: 92 } };
@@ -166,62 +167,11 @@ export function ShapeNode({ data, selected, width, height }) {
 
 export function GroupNode({ data, selected }) {
   const { getZoom } = useReactFlow();
-  const [drag, setDrag] = React.useState(null); /* {i, pt, isNew} */
-  const dragRef = React.useRef(null);
-
-  const basePts = data.points;
-  const poly = Array.isArray(basePts) && basePts.length >= 3;
-  const pts = React.useMemo(() => {
-    if (!poly) return null;
-    if (!drag) return basePts;
-    const c = basePts.slice();
-    if (drag.isNew) c.splice(drag.i + 1, 0, drag.pt);
-    else c[drag.i] = drag.pt;
-    return c;
-  }, [poly, basePts, drag]);
-
-  const editingV = !!(data.editable && selected && poly);
-
-  const beginVertex = (i, isNew, startPt) => (e) => {
-    e.stopPropagation();
-    e.preventDefault();
-    e.currentTarget.setPointerCapture?.(e.pointerId);
-    dragRef.current = { sx: e.clientX, sy: e.clientY, orig: startPt, zoom: getZoom() || 1 };
-    setDrag({ i, isNew, pt: startPt });
-  };
-  const moveVertex = (e) => {
-    const d = dragRef.current;
-    if (!d) return;
-    e.stopPropagation();
-    setDrag((cur) =>
-      cur && {
-        ...cur,
-        pt: { x: d.orig.x + (e.clientX - d.sx) / d.zoom, y: d.orig.y + (e.clientY - d.sy) / d.zoom }
-      }
-    );
-  };
-  const endVertex = (commit) => (e) => {
-    const d = dragRef.current;
-    if (!d) return;
-    e.stopPropagation();
-    dragRef.current = null;
-    setDrag((cur) => {
-      if (cur && commit) {
-        if (cur.isNew) data.onVertexInsert?.(cur.i, cur.pt);
-        else data.onVertexMove?.(cur.i, cur.pt);
-      }
-      return null;
-    });
-  };
-
+  const [ldrag, setLdrag] = React.useState(null);
+  const ldragRef = React.useRef(null);
+  const pts = data.points;
+  const poly = Array.isArray(pts) && pts.length >= 3;
   const w = data.size?.w || 0, h = data.size?.h || 0;
-  const ghosts =
-    editingV && !drag && pts
-      ? pts.map((p, i) => {
-          const q = pts[(i + 1) % pts.length];
-          return { i, x: (p.x + q.x) / 2, y: (p.y + q.y) / 2 };
-        })
-      : [];
 
   return (
     <div className={`group-node ${poly ? "group-node-poly" : ""}`}>
@@ -242,36 +192,59 @@ export function GroupNode({ data, selected }) {
           onResizeEnd={(_e, p) => data.onResizeEnd?.(p)}
         />
       )}
-      <span className="group-label" style={{ fontSize: data.fontSize }}>{data.label}</span>
-      {editingV &&
-        pts.map((p, i) => (
-          <div
-            key={`v${i}`}
-            className="gv-dot nodrag nopan"
-            style={{ left: p.x, top: p.y }}
-            title="Drag to move corner — double-click to remove"
-            onPointerDown={beginVertex(i, false, p)}
-            onPointerMove={moveVertex}
-            onPointerUp={endVertex(true)}
-            onPointerCancel={endVertex(false)}
-            onDoubleClick={(e) => {
-              e.stopPropagation();
-              data.onVertexRemove?.(i);
+      {(() => {
+        const g = { points: pts, size: data.size, labelPos: data.labelPos };
+        const a = ldrag ? { ...ldrag, center: true, width: 0 } : labelAnchor(g);
+        const grab = !!data.editable;
+
+        const begin = (e) => {
+          e.stopPropagation();
+          e.preventDefault();
+          e.currentTarget.setPointerCapture?.(e.pointerId);
+          ldragRef.current = { sx: e.clientX, sy: e.clientY, ox: a.x, oy: a.y, zoom: getZoom() || 1 };
+          setLdrag({ x: a.x, y: a.y });
+        };
+        const move = (e) => {
+          const d = ldragRef.current;
+          if (!d) return;
+          e.stopPropagation();
+          setLdrag({
+            x: d.ox + (e.clientX - d.sx) / d.zoom,
+            y: d.oy + (e.clientY - d.sy) / d.zoom
+          });
+        };
+        const end = (commit) => (e) => {
+          const d = ldragRef.current;
+          if (!d) return;
+          e.stopPropagation();
+          ldragRef.current = null;
+          setLdrag((cur) => {
+            if (cur && commit) data.onLabelMove?.(cur);
+            return null;
+          });
+        };
+
+        const centered = a.center || !!ldrag;
+        return (
+          <span
+            className={`group-label ${centered ? "group-label-in" : ""} ${grab ? "group-label-grab nodrag nopan" : ""}`}
+            style={{
+              fontSize: data.fontSize,
+              ...(centered
+                ? { left: a.x, top: a.y, maxWidth: a.width ? Math.max(40, a.width - 10) : undefined }
+                : {})
             }}
-          />
-        ))}
-      {ghosts.map((g) => (
-        <div
-          key={`g${g.i}`}
-          className="gv-ghost nodrag nopan"
-          style={{ left: g.x, top: g.y }}
-          title="Drag to add a corner here"
-          onPointerDown={beginVertex(g.i, true, { x: g.x, y: g.y })}
-          onPointerMove={moveVertex}
-          onPointerUp={endVertex(true)}
-          onPointerCancel={endVertex(false)}
-        />
-      ))}
+            onPointerDown={grab ? begin : undefined}
+            onPointerMove={grab ? move : undefined}
+            onPointerUp={grab ? end(true) : undefined}
+            onPointerCancel={grab ? end(false) : undefined}
+            onDoubleClick={grab ? (e) => { e.stopPropagation(); data.onLabelMove?.(null); } : undefined}
+            title={grab ? "Drag to move this label — double-click to reset" : undefined}
+          >
+            {data.label}
+          </span>
+        );
+      })()}
     </div>
   );
 }
@@ -291,5 +264,21 @@ export function UnderlayNode({ data }) {
         filter: "saturate(0.85)"
       }}
     />
+  );
+}
+
+export function DrawPreviewNode({ data }) {
+  const { pts, cursor, near } = data;
+  const path = pts.map((p) => `${p.x},${p.y}`).join(" ");
+  const live = cursor ? `${path} ${cursor.x},${cursor.y}` : path;
+  return (
+    <svg className="draw-preview" width="1" height="1" style={{ overflow: "visible" }}>
+      {pts.length >= 2 && <polygon points={live} className="dp-fill" />}
+      <polyline points={live} className="dp-line" />
+      {pts.map((p, i) => (
+        <circle key={i} cx={p.x} cy={p.y} r={i === 0 ? 7 : 4.5}
+          className={i === 0 ? (near ? "dp-start dp-near" : "dp-start") : "dp-pt"} />
+      ))}
+    </svg>
   );
 }

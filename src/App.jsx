@@ -5,7 +5,7 @@ import {
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 
-import { ShapeNode, GroupNode, UnderlayNode, nodeSize } from "./nodes";
+import { ShapeNode, GroupNode, UnderlayNode, DrawPreviewNode, nodeSize } from "./nodes";
 import WaypointEdge from "./WaypointEdge";
 import { validateConfig } from "./validate";
 import { buildDiagramSvg, buildStaticHtml } from "./exportSvg";
@@ -18,11 +18,11 @@ import {
   addNode, addGroup, addEdge, deleteNode, deleteEdge, deleteGroup, deleteProcess,
   renameId, updateElement, insertWaypoint, insertWaypointAt, moveWaypoint, removeWaypoint,
   reverseEdge, deleteMany, applyNodeResize, applyGroupResize, setFontSizes, reparentByPosition,
-  moveVertex, insertVertexAt, removeVertex, wrapSelection, isPoly,
+  addPolyGroup, wrapSelection, setLabelPos,
   descendantGroups, allIds, slugId, edgePoints, TYPE_LABEL
 } from "./editor/ops";
 
-const nodeTypes = { shape: ShapeNode, grouper: GroupNode, underlay: UnderlayNode };
+const nodeTypes = { shape: ShapeNode, grouper: GroupNode, underlay: UnderlayNode, drawpreview: DrawPreviewNode };
 const edgeTypes = { wp: WaypointEdge };
 const DEFAULT_COLOR = "#2563eb";
 const UNDERLAY_ID = "__underlay";
@@ -38,7 +38,7 @@ function processMembership(cfg, litNodes, litEdgesExplicit) {
 }
 
 function toFlow(cfg, opts) {
-  const { selectedProcId, editing, builder, underlay, wpHandlers, rsHandlers, gpHandlers } = opts;
+  const { selectedProcId, editing, builder, underlay, wpHandlers, rsHandlers } = opts;
 
   /* what is highlighted: builder preview wins over process selection */
   let member = null, color = DEFAULT_COLOR, dimHard = true;
@@ -106,12 +106,10 @@ function toFlow(cfg, opts) {
     ...(g.group && gById[g.group] ? { parentId: g.group } : {}),
     data: {
       label: g.label, attrs: g.attrs, fontSize: g.fontSize,
-      points: g.points, size: g.size,
+      points: g.points, size: g.size, labelPos: g.labelPos,
       editable: editing && !builder,
       onResizeEnd: (p) => rsHandlers.group(g.id, p),
-      onVertexMove: (i, p) => gpHandlers.move(g.id, i, p),
-      onVertexInsert: (i, p) => gpHandlers.insert(g.id, i, p),
-      onVertexRemove: (i) => gpHandlers.remove(g.id, i)
+      onLabelMove: (p) => rsHandlers.groupLabel(g.id, p)
     },
     width: g.size.w,
     height: g.size.h,
@@ -317,9 +315,13 @@ export default function App() {
   const [nodes, setNodes] = useState([]);
   const [edges, setEdges] = useState([]);
   const fileRef = useRef(null);
-  const { screenToFlowPosition } = useReactFlow();
+  const { screenToFlowPosition, getZoom } = useReactFlow();
 
   const editing = mode === "edit";
+
+  useEffect(() => {
+    if (!editing) setDraw(null);
+  }, [editing]);
 
   useEffect(() => {
     if (selectedProc && !config.processes.some((p) => p.id === selectedProc)) {
@@ -346,17 +348,9 @@ export default function App() {
     []
   );
 
-  const gpHandlers = useMemo(
-    () => ({
-      move: (gid, i, p) => setConfig((c) => moveVertex(c, gid, i, p)),
-      insert: (gid, i, p) => setConfig((c) => insertVertexAt(c, gid, i, p)),
-      remove: (gid, i) => setConfig((c) => removeVertex(c, gid, i))
-    }),
-    []
-  );
-
   const rsHandlers = useMemo(
     () => ({
+      groupLabel: (gid, p) => setConfig((c) => setLabelPos(c, gid, p)),
       node: (id, p) => setConfig((c) => applyNodeResize(c, id, p)),
       group: (id, p) => setConfig((c) => applyGroupResize(c, id, p))
     }),
@@ -365,7 +359,7 @@ export default function App() {
 
   useEffect(() => {
     const f = toFlow(config, {
-      selectedProcId: selectedProc, editing, builder, underlay, wpHandlers, rsHandlers, gpHandlers
+      selectedProcId: selectedProc, editing, builder, underlay, wpHandlers, rsHandlers
     });
     setNodes((prev) => {
       /* preserve React Flow selection flags across rebuilds */
@@ -376,7 +370,7 @@ export default function App() {
       const sel = new Set(prev.filter((e) => e.selected).map((e) => e.id));
       return f.edges.map((e) => (sel.has(e.id) ? { ...e, selected: true } : e));
     });
-  }, [config, selectedProc, editing, builder, underlay, wpHandlers, rsHandlers, gpHandlers]);
+  }, [config, selectedProc, editing, builder, underlay, wpHandlers, rsHandlers]);
 
   const onNodesChange = useCallback(
     (changes) => setNodes((nds) => applyNodeChanges(changes, nds)),
@@ -467,6 +461,66 @@ export default function App() {
       setSelection({ kind: "group", id });
     },
     [config]
+  );
+
+  /* ---- containers can also be drawn as a closed loop of clicked points ---- */
+  const [draw, setDraw] = useState(null); /* { pts: [], cursor, near } */
+  const drawRef = useRef(null);
+  drawRef.current = draw;
+
+  const startDraw = useCallback(() => {
+    setSelection(null);
+    setDraw({ pts: [], cursor: null, near: false });
+  }, []);
+
+  const cancelDraw = useCallback(() => setDraw(null), []);
+
+  const closeLoop = useCallback(() => {
+    const d = drawRef.current;
+    if (!d || d.pts.length < 3) return;
+    const { cfg: next, id } = addPolyGroup(config, d.pts);
+    setConfig(next);
+    setDraw(null);
+    setSelection({ kind: "group", id });
+  }, [config]);
+
+  const NEAR_PX = 14;
+
+  const onCanvasMove = useCallback(
+    (e) => {
+      const d = drawRef.current;
+      if (!d) return;
+      const p = screenToFlowPosition({ x: e.clientX, y: e.clientY });
+      const first = d.pts[0];
+      const z = getZoom() || 1;
+      const near =
+        !!first && d.pts.length >= 3 &&
+        Math.hypot(p.x - first.x, p.y - first.y) * z < NEAR_PX;
+      setDraw((cur) =>
+        cur && { ...cur, cursor: { x: Math.round(p.x), y: Math.round(p.y) }, near }
+      );
+    },
+    [screenToFlowPosition, getZoom]
+  );
+
+  const onCanvasClick = useCallback(
+    (e) => {
+      const d = drawRef.current;
+      if (!d) return;
+      e.preventDefault();
+      e.stopPropagation();
+      const p = screenToFlowPosition({ x: e.clientX, y: e.clientY });
+      const first = d.pts[0];
+      const z = getZoom() || 1;
+      if (first && d.pts.length >= 3 && Math.hypot(p.x - first.x, p.y - first.y) * z < NEAR_PX) {
+        closeLoop();
+        return;
+      }
+      setDraw((cur) =>
+        cur && { ...cur, pts: [...cur.pts, { x: Math.round(p.x), y: Math.round(p.y) }] }
+      );
+    },
+    [screenToFlowPosition, getZoom, closeLoop]
   );
 
   const onDrop = useCallback(
@@ -571,6 +625,10 @@ export default function App() {
     const onKey = (e) => {
       const t = document.activeElement?.tagName;
       const typing = t === "INPUT" || t === "TEXTAREA" || t === "SELECT";
+      if (drawRef.current && !typing) {
+        if (e.key === "Escape") { e.preventDefault(); cancelDraw(); return; }
+        if (e.key === "Enter") { e.preventDefault(); closeLoop(); return; }
+      }
       if ((e.ctrlKey || e.metaKey) && !typing) {
         const k = e.key.toLowerCase();
         if (k === "z") {
@@ -593,7 +651,7 @@ export default function App() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [editing, builder, selection, confirmDelete, undo, redo]);
+  }, [editing, builder, selection, confirmDelete, undo, redo, cancelDraw, closeLoop]);
 
   /* ---- process builder ---- */
   const startBuilder = useCallback((proc) => {
@@ -825,20 +883,59 @@ export default function App() {
   const handlePatch = (patch) =>
     setConfig((cfg) => updateElement(cfg, selection.kind, selection.id, patch));
 
+  const flowNodes = useMemo(() => {
+    if (!draw) return nodes;
+    return [
+      ...nodes,
+      {
+        id: "__draw_preview__",
+        type: "drawpreview",
+        position: { x: 0, y: 0 },
+        data: { pts: draw.pts, cursor: draw.cursor, near: draw.near },
+        draggable: false, selectable: false, connectable: false,
+        zIndex: 4000, style: { pointerEvents: "none" }
+      }
+    ];
+  }, [nodes, draw]);
+
   return (
     <div className="frame" onMouseMove={onMouseMove}>
       {editing && (
         <Palette
           onAdd={(t) => doAddNode(t, centerPos())}
           onAddGroup={() => doAddGroup(centerPos())}
+          onDrawGroup={startDraw}
+          drawing={!!draw}
           onUnderlay={loadUnderlay}
           hasUnderlay={!!underlay}
         />
       )}
 
-      <div className={`canvas-pane ${builder ? "builder-mode" : ""}`}>
+      <div
+        className={`canvas-pane ${builder ? "builder-mode" : ""} ${draw ? "drawing" : ""}`}
+        onClickCapture={draw ? onCanvasClick : undefined}
+        onMouseMoveCapture={draw ? onCanvasMove : undefined}
+        onDoubleClickCapture={draw ? (e) => { e.preventDefault(); e.stopPropagation(); closeLoop(); } : undefined}
+        onContextMenu={draw ? (e) => { e.preventDefault(); cancelDraw(); } : undefined}
+      >
+        {draw && (
+          <div className="draw-hint">
+            <span>
+              {draw.pts.length === 0
+                ? "Click on the canvas to place the first point of the container"
+                : draw.pts.length < 3
+                ? `${draw.pts.length} point(s) — keep clicking to trace the outline`
+                : draw.near
+                ? "Click the highlighted start point to close the loop"
+                : `${draw.pts.length} points — click the first point to close (or press Enter)`}
+            </span>
+            <button className="pp-mini" onClick={cancelDraw} title="Cancel (Esc)">
+              cancel
+            </button>
+          </div>
+        )}
         <ReactFlow
-          nodes={nodes}
+          nodes={flowNodes}
           edges={edges}
           nodeTypes={nodeTypes}
           edgeTypes={edgeTypes}
@@ -861,10 +958,10 @@ export default function App() {
           minZoom={0.2}
           maxZoom={2.5}
           proOptions={{ hideAttribution: true }}
-          nodesDraggable={editing && !builder}
-          nodesConnectable={editing && !builder}
-          elementsSelectable={editing && !builder}
-          selectionOnDrag={editing && !builder}
+          nodesDraggable={editing && !builder && !draw}
+          nodesConnectable={editing && !builder && !draw}
+          elementsSelectable={editing && !builder && !draw}
+          selectionOnDrag={editing && !builder && !draw}
           selectionMode={SelectionMode.Partial}
           panOnDrag={editing && !builder ? [1, 2] : true}
           panOnScroll={editing && !builder}

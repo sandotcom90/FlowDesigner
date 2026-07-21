@@ -68,7 +68,7 @@ function Mini({ type }) {
   }
 }
 
-export default function Palette({ onAdd, onAddGroup, onUnderlay, hasUnderlay }) {
+export default function Palette({ onAdd, onAddGroup, onDrawGroup, onUnderlay, hasUnderlay, drawing }) {
   const fileRef = useRef(null);
   return (
     <div className="palette">
@@ -88,7 +88,7 @@ export default function Palette({ onAdd, onAddGroup, onUnderlay, hasUnderlay }) 
       ))}
       <button
         className="palette-item"
-        title="Container box — drag onto the canvas or click to add"
+        title="Rectangular container — drag onto the canvas or click to add"
         draggable
         onDragStart={(e) => e.dataTransfer.setData("application/diagram-type", "__group")}
         onClick={onAddGroup}
@@ -97,6 +97,16 @@ export default function Palette({ onAdd, onAddGroup, onUnderlay, hasUnderlay }) 
           <rect x="2" y="2" width="36" height="20" rx="4" className="mini-shape mini-group" />
         </svg>
         <span>Container</span>
+      </button>
+      <button
+        className={`palette-item ${drawing ? "palette-armed" : ""}`}
+        title="Drawn container — click points on the canvas, then click the first point again to close the loop"
+        onClick={onDrawGroup}
+      >
+        <svg width="40" height="24" viewBox="0 0 40 24">
+          <polygon points="3,21 3,8 16,3 16,12 28,12 28,4 37,7 37,21" className="mini-shape mini-group" />
+        </svg>
+        <span>{drawing ? "Drawing\u2026" : "Draw"}</span>
       </button>
       <div className="palette-sep" />
       <button className="palette-item" title="Load an image to trace over" onClick={() => fileRef.current?.click()}>
