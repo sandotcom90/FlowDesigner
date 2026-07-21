@@ -17,7 +17,8 @@ import ProcessBuilder from "./editor/ProcessBuilder";
 import {
   addNode, addGroup, addEdge, deleteNode, deleteEdge, deleteGroup, deleteProcess,
   renameId, updateElement, insertWaypoint, insertWaypointAt, moveWaypoint, removeWaypoint,
-  reverseEdge, deleteMany, applyNodeResize, applyGroupResize, setFontSizes,
+  reverseEdge, deleteMany, applyNodeResize, applyGroupResize, setFontSizes, reparentByPosition,
+  moveVertex, insertVertexAt, removeVertex, wrapSelection, isPoly,
   descendantGroups, allIds, slugId, edgePoints, TYPE_LABEL
 } from "./editor/ops";
 
@@ -37,7 +38,7 @@ function processMembership(cfg, litNodes, litEdgesExplicit) {
 }
 
 function toFlow(cfg, opts) {
-  const { selectedProcId, editing, builder, underlay, wpHandlers, rsHandlers } = opts;
+  const { selectedProcId, editing, builder, underlay, wpHandlers, rsHandlers, gpHandlers } = opts;
 
   /* what is highlighted: builder preview wins over process selection */
   let member = null, color = DEFAULT_COLOR, dimHard = true;
@@ -105,8 +106,12 @@ function toFlow(cfg, opts) {
     ...(g.group && gById[g.group] ? { parentId: g.group } : {}),
     data: {
       label: g.label, attrs: g.attrs, fontSize: g.fontSize,
+      points: g.points, size: g.size,
       editable: editing && !builder,
-      onResizeEnd: (p) => rsHandlers.group(g.id, p)
+      onResizeEnd: (p) => rsHandlers.group(g.id, p),
+      onVertexMove: (i, p) => gpHandlers.move(g.id, i, p),
+      onVertexInsert: (i, p) => gpHandlers.insert(g.id, i, p),
+      onVertexRemove: (i) => gpHandlers.remove(g.id, i)
     },
     width: g.size.w,
     height: g.size.h,
@@ -156,7 +161,9 @@ function toFlow(cfg, opts) {
         editable: editing && !builder,
         onWaypointMove: (i, p) => wpHandlers.move(e.id, i, p),
         onWaypointRemove: (i) => wpHandlers.remove(e.id, i),
-        onWaypointInsertAt: (i, p) => wpHandlers.insertAt(e.id, i, p)
+        onWaypointInsertAt: (i, p) => wpHandlers.insertAt(e.id, i, p),
+        labelOffset: e.labelOffset,
+        onLabelMove: (off) => wpHandlers.label(e.id, off)
       },
       className: dim ? (dimHard ? "dim-edge" : "bdim-edge") : lit ? "lit-edge" : "",
       style: { stroke: lit ? color : "#5b6470", strokeWidth: lit ? 2.6 : 1.6 },
@@ -325,7 +332,25 @@ export default function App() {
     () => ({
       move: (edgeId, i, p) => setConfig((c) => moveWaypoint(c, edgeId, i, p)),
       remove: (edgeId, i) => setConfig((c) => removeWaypoint(c, edgeId, i)),
-      insertAt: (edgeId, i, p) => setConfig((c) => insertWaypointAt(c, edgeId, i, p))
+      insertAt: (edgeId, i, p) => setConfig((c) => insertWaypointAt(c, edgeId, i, p)),
+      label: (edgeId, off) =>
+        setConfig((c) =>
+          updateElement(
+            c, "edge", edgeId,
+            Math.abs(off.x) < 3 && Math.abs(off.y) < 3
+              ? { labelOffset: undefined }
+              : { labelOffset: { x: Math.round(off.x), y: Math.round(off.y) } }
+          )
+        )
+    }),
+    []
+  );
+
+  const gpHandlers = useMemo(
+    () => ({
+      move: (gid, i, p) => setConfig((c) => moveVertex(c, gid, i, p)),
+      insert: (gid, i, p) => setConfig((c) => insertVertexAt(c, gid, i, p)),
+      remove: (gid, i) => setConfig((c) => removeVertex(c, gid, i))
     }),
     []
   );
@@ -340,7 +365,7 @@ export default function App() {
 
   useEffect(() => {
     const f = toFlow(config, {
-      selectedProcId: selectedProc, editing, builder, underlay, wpHandlers, rsHandlers
+      selectedProcId: selectedProc, editing, builder, underlay, wpHandlers, rsHandlers, gpHandlers
     });
     setNodes((prev) => {
       /* preserve React Flow selection flags across rebuilds */
@@ -351,7 +376,7 @@ export default function App() {
       const sel = new Set(prev.filter((e) => e.selected).map((e) => e.id));
       return f.edges.map((e) => (sel.has(e.id) ? { ...e, selected: true } : e));
     });
-  }, [config, selectedProc, editing, builder, underlay, wpHandlers, rsHandlers]);
+  }, [config, selectedProc, editing, builder, underlay, wpHandlers, rsHandlers, gpHandlers]);
 
   const onNodesChange = useCallback(
     (changes) => setNodes((nds) => applyNodeChanges(changes, nds)),
@@ -368,7 +393,16 @@ export default function App() {
     const under = list.find((n) => n.id === UNDERLAY_ID);
     if (under) setUnderlay((u) => (u ? { ...u, position: under.position } : u));
     const rest = list.filter((n) => n.id !== UNDERLAY_ID);
-    if (rest.length) setConfig((cfg) => rest.reduce((c, n) => applyDrag(c, n), cfg));
+    if (rest.length)
+      setConfig((cfg) => {
+        let next = rest.reduce((c, n) => applyDrag(c, n), cfg);
+        /* single-element drags can re-nest into the container under them */
+        if (rest.length === 1 && rest[0].type !== "underlay") {
+          const kind = rest[0].type === "grouper" ? "group" : "node";
+          next = reparentByPosition(next, kind, rest[0].id);
+        }
+        return next;
+      });
   }, []);
 
   /* ---- selection ---- */
@@ -866,6 +900,21 @@ export default function App() {
                     </label>
                   ))}
                 <span className="sel-sep" />
+                <button
+                  className="pp-mini"
+                  onClick={() => {
+                    if (!effectiveMulti?.nodes.length) return;
+                    const r = wrapSelection(config, effectiveMulti.nodes);
+                    if (r.id) {
+                      setConfig(r.cfg);
+                      setSelection({ kind: "group", id: r.id });
+                    }
+                  }}
+                  disabled={!effectiveMulti || effectiveMulti.nodes.length === 0}
+                  title="Draw a polygon container around the checked components and put them inside it"
+                >
+                  Wrap
+                </button>
                 <input
                   className="sel-font"
                   type="number" min="6" max="48" step="0.5"

@@ -786,3 +786,31 @@ html, body, #root {
 }
 .sel-font:focus { outline: none; border-color: var(--accent); }
 .sel-delete:disabled, .pp-mini:disabled { opacity: 0.4; cursor: default; }
+
+.edge-label-grab { cursor: grab; pointer-events: all; }
+.edge-label-grab:active { cursor: grabbing; }
+.edge-label-grab { touch-action: none; }
+
+.group-node-poly { background: transparent !important; border: none !important; }
+.grp-svg { position: absolute; inset: 0; overflow: visible; pointer-events: none; }
+.grp-poly {
+  fill: rgba(255, 255, 255, 0.35);
+  stroke: #9aa2ad;
+  stroke-width: 1.5;
+  vector-effect: non-scaling-stroke;
+  stroke-linejoin: round;
+}
+.selected .grp-poly, .group-node-poly:hover .grp-poly { stroke: var(--accent); }
+.gv-dot, .gv-ghost {
+  position: absolute;
+  width: 12px; height: 12px;
+  margin: -6px 0 0 -6px;
+  border-radius: 50%;
+  cursor: grab;
+  touch-action: none;
+  z-index: 5;
+}
+.gv-dot { background: var(--accent); border: 2px solid #fff; box-shadow: 0 1px 3px rgba(0,0,0,.3); }
+.gv-dot:active { cursor: grabbing; }
+.gv-ghost { background: transparent; border: 2px dashed var(--accent); opacity: .55; }
+.gv-ghost:hover { opacity: 1; background: rgba(37, 99, 235, .15); }

@@ -38,7 +38,7 @@
     },
     "port": {
       "type": "string",
-      "enum": ["t", "r", "b", "l"],
+      "enum": ["t", "t1", "t3", "r", "r1", "r3", "b", "b1", "b3", "l", "l1", "l3"],
       "description": "Side of the node the edge attaches to: top, right, bottom, left."
     }
   },
@@ -66,6 +66,12 @@
           "group": {
             "$ref": "#/definitions/id",
             "description": "Optional id of a parent group, allowing nested groups."
+          },
+          "points": {
+            "type": "array",
+            "description": "Optional polygon outline (vertices relative to position). When present the container is a polygon instead of a rectangle; size should be its bounding box.",
+            "minItems": 3,
+            "items": { "$ref": "#/definitions/point" }
           },
           "fontSize": { "type": "number", "minimum": 6, "maximum": 48 },
           "attrs": { "$ref": "#/definitions/attrs" }
@@ -111,6 +117,13 @@
           "source": { "$ref": "#/definitions/id" },
           "target": { "$ref": "#/definitions/id" },
           "label": { "type": "string" },
+          "labelOffset": {
+            "type": "object",
+            "description": "Offset of the edge label from its natural midpoint, in canvas px.",
+            "additionalProperties": false,
+            "required": ["x", "y"],
+            "properties": { "x": { "type": "number" }, "y": { "type": "number" } }
+          },
           "sourcePort": { "$ref": "#/definitions/port" },
           "targetPort": { "$ref": "#/definitions/port" },
           "direction": {

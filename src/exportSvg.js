@@ -143,6 +143,7 @@ export function buildDiagramSvg(cfg, proc, opts = {}) {
   (cfg.groups || []).forEach((g) => {
     grow(g.position.x, g.position.y);
     grow(g.position.x + g.size.w, g.position.y + g.size.h);
+    (g.points || []).forEach((p) => grow(g.position.x + p.x, g.position.y + p.y));
   });
   cfg.edges.forEach((e) => (e.waypoints || []).forEach((p) => grow(p.x, p.y)));
   const PAD = 50;
@@ -177,8 +178,8 @@ export function buildDiagramSvg(cfg, proc, opts = {}) {
       lx = (a.x + b.x) / 2; ly = (a.y + b.y) / 2;
     } else {
       [d, lx, ly] = getSmoothStepPath({
-        sourceX: s.x, sourceY: s.y, sourcePosition: POS[sp],
-        targetX: t.x, targetY: t.y, targetPosition: POS[tp],
+        sourceX: s.x, sourceY: s.y, sourcePosition: POS[sp[0]],
+        targetX: t.x, targetY: t.y, targetPosition: POS[tp[0]],
         borderRadius: 10
       });
     }
@@ -191,6 +192,8 @@ export function buildDiagramSvg(cfg, proc, opts = {}) {
       `<g${gCls}><title>${esc(tt)}</title><path class="vis" d="${d}" fill="none" stroke="${stroke}" stroke-width="${sw}" marker-end="url(#${markerFor(stroke)})"${both}/><path d="${d}" fill="none" stroke="transparent" stroke-width="14"/></g>`
     );
     if (e.label) {
+      lx += e.labelOffset?.x || 0;
+      ly += e.labelOffset?.y || 0;
       edgeLabelParts.push(
         `<text x="${lx}" y="${ly}" class="elabel${inter ? ` el${pcls(maps.edgeP, e.id)}` : ""}" text-anchor="middle" dominant-baseline="central"${
           e.fontSize ? ` font-size="${e.fontSize}px"` : ""
@@ -234,7 +237,11 @@ export function buildDiagramSvg(cfg, proc, opts = {}) {
       const gCls = inter ? ` class="el grp${pcls(maps.grpP, g.id)}"` : !hasLit ? ' class="dim"' : "";
       return `<g${gCls}>
 <title>${esc(tt)}</title>
-<rect x="${g.position.x}" y="${g.position.y}" width="${g.size.w}" height="${g.size.h}" rx="10" fill="rgba(255,255,255,0.35)" stroke="#9aa2ad" stroke-width="1.5"/>
+${
+        Array.isArray(g.points) && g.points.length >= 3
+          ? `<polygon points="${g.points.map((p) => `${g.position.x + p.x},${g.position.y + p.y}`).join(" ")}" fill="rgba(255,255,255,0.35)" stroke="#9aa2ad" stroke-width="1.5" stroke-linejoin="round"/>`
+          : `<rect x="${g.position.x}" y="${g.position.y}" width="${g.size.w}" height="${g.size.h}" rx="10" fill="rgba(255,255,255,0.35)" stroke="#9aa2ad" stroke-width="1.5"/>`
+      }
 <text x="${g.position.x + 12}" y="${g.position.y + 14}" class="glabel"${g.fontSize ? ` font-size="${g.fontSize}px"` : ""}>${esc(g.label.toUpperCase())}</text>
 </g>`;
     });
@@ -306,21 +313,30 @@ ${edgeLabelParts.join("\n")}
 
 
 /**
- * Standalone, script-free HTML page of the diagram. Highlighting works
- * without any JavaScript: hidden radio inputs + CSS sibling selectors,
+ * Standalone, script-free HTML page of the diagram. Highlighting and zoom
+ * work without any JavaScript: hidden radio inputs + CSS sibling selectors,
  * so it survives hosts that strip <script> (Confluence, SharePoint).
  */
 export function buildStaticHtml(cfg, proc) {
-  const { svg, procMarkers } = buildDiagramSvg(cfg, null, { interactive: true });
+  const { svg, width, procMarkers } = buildDiagramSvg(cfg, null, { interactive: true });
   const title = esc(cfg.meta?.title || "Interface Diagram");
+
+  const ZOOMS = [
+    ["fit", "fit width", null],
+    ["100", "100%", 1],
+    ["150", "150%", 1.5],
+    ["200", "200%", 2],
+    ["300", "300%", 3]
+  ];
 
   const radios =
     `<input type="radio" name="proc" id="r-none"${proc ? "" : " checked"}>` +
     cfg.processes
       .map((p) => `<input type="radio" name="proc" id="r-${p.id}"${proc && proc.id === p.id ? " checked" : ""}>`)
-      .join("");
+      .join("") +
+    ZOOMS.map(([z], i) => `<input type="radio" name="zoom" id="z-${z}"${i === 0 ? " checked" : ""}>`).join("");
 
-  const legend =
+  const groupChips =
     cfg.processes
       .map(
         (p) =>
@@ -328,18 +344,28 @@ export function buildStaticHtml(cfg, proc) {
       )
       .join("") + `<label class="lg all" for="r-none">show all</label>`;
 
-  const rules = cfg.processes
+  const zoomChips = ZOOMS.map(([z, name]) => `<label class="zg" for="z-${z}">${name}</label>`).join("");
+
+  const procRules = cfg.processes
     .map((p) => {
       const c = p.color || "#2563eb";
       const m = procMarkers[p.id];
       return `
-#r-${p.id}:checked ~ main svg .el:not(.p-${p.id}){opacity:.12;filter:grayscale(.85)}
-#r-${p.id}:checked ~ main svg g.edge.p-${p.id} path.vis{stroke:${c};stroke-width:2.6;marker-end:url(#${m})}
-#r-${p.id}:checked ~ main svg g.edge.p-${p.id}.two path.vis{marker-start:url(#${m})}
-#r-${p.id}:checked ~ main svg text.elabel.p-${p.id}{fill:${c};opacity:1}
-#r-${p.id}:checked ~ main svg g.node.p-${p.id}{filter:url(#litshadow)}
-#r-${p.id}:checked ~ header label[for=r-${p.id}]{font-weight:bold;border-color:currentColor;background:#fff}`;
+#r-${p.id}:checked ~ .wrap main svg .el:not(.p-${p.id}){opacity:.12;filter:grayscale(.85)}
+#r-${p.id}:checked ~ .wrap main svg g.edge.p-${p.id} path.vis{stroke:${c};stroke-width:2.6;marker-end:url(#${m})}
+#r-${p.id}:checked ~ .wrap main svg g.edge.p-${p.id}.two path.vis{marker-start:url(#${m})}
+#r-${p.id}:checked ~ .wrap main svg text.elabel.p-${p.id}{fill:${c};opacity:1}
+#r-${p.id}:checked ~ .wrap main svg g.node.p-${p.id}{filter:url(#litshadow)}
+#r-${p.id}:checked ~ .wrap aside label[for=r-${p.id}]{font-weight:bold;border-color:currentColor;background:#fff}`;
     })
+    .join("\n");
+
+  const zoomRules = ZOOMS.filter(([, , f]) => f)
+    .map(
+      ([z, , f]) =>
+        `#z-${z}:checked ~ .wrap main svg{width:${Math.round(width * f)}px;max-width:none}
+#z-${z}:checked ~ .wrap aside label[for=z-${z}]{font-weight:bold;background:#fff;border-color:currentColor}`
+    )
     .join("\n");
 
   return `<!doctype html>
@@ -349,28 +375,43 @@ export function buildStaticHtml(cfg, proc) {
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>${title}</title>
 <style>
-body{margin:0;font-family:Consolas,'Cascadia Mono',monospace;background:#e9eae5;color:#22272e}
-input[name=proc]{position:absolute;opacity:0;pointer-events:none}
-header{padding:14px 20px;border-bottom:2px solid #38404a;background:#fafaf7;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px}
+*{box-sizing:border-box}
+body{margin:0;font-family:Consolas,'Cascadia Mono',monospace;background:#e9eae5;color:#22272e;height:100vh;display:flex;flex-direction:column}
+input[name=proc],input[name=zoom]{position:absolute;opacity:0;pointer-events:none}
+header{padding:12px 20px;border-bottom:2px solid #38404a;background:#fafaf7;flex:0 0 auto}
 h1{font-size:16px;margin:0;letter-spacing:.02em}
-.legend{display:flex;gap:8px;flex-wrap:wrap;font-size:12px}
-.lg{display:inline-flex;align-items:center;cursor:pointer;padding:3px 9px;border:1.5px solid #c9cdc4;border-radius:14px;user-select:none}
-.lg:hover{background:#fff}
-.lg i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:6px}
-.lg.all{color:#5b6470}
-#r-none:checked ~ header label.all{font-weight:bold;background:#fff}
-main{padding:20px;overflow:auto}
-main svg{max-width:100%;height:auto;box-shadow:0 2px 10px rgba(0,0,0,.15);border-radius:8px;background:#f2f3ee}
+.wrap{flex:1 1 auto;display:flex;min-height:0}
+main{flex:1 1 auto;overflow:auto;padding:20px}
+main svg{width:100%;height:auto;box-shadow:0 2px 10px rgba(0,0,0,.15);border-radius:8px;background:#f2f3ee;display:block}
 main svg .el{transition:opacity .18s ease}
-footer{padding:8px 20px;font-size:11px;color:#5b6470}
-${rules}
+aside{flex:0 0 216px;overflow-y:auto;border-left:2px solid #38404a;background:#fafaf7;padding:14px}
+aside .sec{font-size:10px;text-transform:uppercase;letter-spacing:.12em;color:#5b6470;margin:0 0 8px}
+aside .sec+.sec{margin-top:18px}
+.groups,.zooms{display:flex;flex-direction:column;gap:6px;margin-bottom:18px}
+.lg,.zg{display:flex;align-items:center;cursor:pointer;padding:6px 10px;border:1.5px solid #c9cdc4;border-radius:8px;font-size:12px;user-select:none}
+.lg:hover,.zg:hover{background:#fff}
+.lg i{display:inline-block;flex:0 0 10px;width:10px;height:10px;border-radius:3px;margin-right:8px}
+.lg.all{color:#5b6470}
+#r-none:checked ~ .wrap aside label.all{font-weight:bold;background:#fff;border-color:currentColor}
+#z-fit:checked ~ .wrap aside label[for=z-fit]{font-weight:bold;background:#fff;border-color:currentColor}
+footer{padding:8px 20px;font-size:11px;color:#5b6470;border-top:1px solid #c9cdc4;background:#fafaf7;flex:0 0 auto}
+${procRules}
+${zoomRules}
 </style>
 </head>
 <body>
 ${radios}
-<header><h1>${title}</h1><div class="legend">${legend}</div></header>
+<header><h1>${title}</h1></header>
+<div class="wrap">
 <main>${svg}</main>
-<footer>rev ${esc(cfg.meta?.version || "\u2014")} \u00b7 ${cfg.nodes.length} nodes \u00b7 ${cfg.edges.length} links \u00b7 click a group to highlight its path \u00b7 hover any element for details</footer>
+<aside>
+<p class="sec">Groups</p>
+<div class="groups">${groupChips}</div>
+<p class="sec">Zoom</p>
+<div class="zooms">${zoomChips}</div>
+</aside>
+</div>
+<footer>rev ${esc(cfg.meta?.version || "\u2014")} \u00b7 ${cfg.nodes.length} nodes \u00b7 ${cfg.edges.length} links \u00b7 click a group to highlight its path \u00b7 zoom in, then scroll the canvas to pan \u00b7 hover any element for details</footer>
 </body>
 </html>
 `;

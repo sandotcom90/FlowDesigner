@@ -81,7 +81,12 @@ function AttrsEditor({ attrs, onChange, idKey }) {
   );
 }
 
-const PORTS = [["t", "top"], ["r", "right"], ["b", "bottom"], ["l", "left"]];
+const PORTS = [
+  ["t1", "top-left"], ["t", "top"], ["t3", "top-right"],
+  ["r1", "right-top"], ["r", "right"], ["r3", "right-bottom"],
+  ["b1", "bottom-left"], ["b", "bottom"], ["b3", "bottom-right"],
+  ["l1", "left-top"], ["l", "left"], ["l3", "left-bottom"]
+];
 
 export default function PropertiesPanel({ cfg, selection, onRename, onPatch, onDelete, onClearWaypoints, onReverse, descendantGroups }) {
   if (!selection) return null;
@@ -164,6 +169,14 @@ export default function PropertiesPanel({ cfg, selection, onRename, onPatch, onD
               </select>
             </Field>
           </div>
+          {el.labelOffset && (
+            <div className="pp-wp">
+              <span>label moved ({el.labelOffset.x}, {el.labelOffset.y})</span>
+              <button className="pp-mini" onClick={() => onPatch({ labelOffset: undefined })}>
+                re-center
+              </button>
+            </div>
+          )}
           <div className="pp-wp">
             <span>{el.waypoints?.length || 0} waypoint(s)</span>
             {el.waypoints?.length > 0 && (
@@ -190,13 +203,44 @@ export default function PropertiesPanel({ cfg, selection, onRename, onPatch, onD
                 return !desc.includes(g.id);
               })
               .map((g) => (
-                <option key={g.id} value={g.id}>{g.label}</option>
+                <option key={g.id} value={g.id}>{g.label} ({g.id})</option>
               ))}
           </select>
         </Field>
       )}
 
       {kind === "group" && (
+        <div className="pp-wp">
+          {el.points ? (
+            <>
+              <span>polygon &#183; {el.points.length} corners</span>
+              <button className="pp-mini" onClick={() => onPatch({ points: undefined })}>
+                back to rectangle
+              </button>
+            </>
+          ) : (
+            <>
+              <span>rectangle</span>
+              <button
+                className="pp-mini"
+                title="Turn this container into an editable polygon — drag the corner dots to bend it"
+                onClick={() =>
+                  onPatch({
+                    points: [
+                      { x: 0, y: 0 }, { x: el.size.w, y: 0 },
+                      { x: el.size.w, y: el.size.h }, { x: 0, y: el.size.h }
+                    ]
+                  })
+                }
+              >
+                convert to polygon
+              </button>
+            </>
+          )}
+        </div>
+      )}
+
+      {kind === "group" && !el.points && (
         <div className="pp-two">
           <Field label="width">
             <input

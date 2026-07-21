@@ -33,15 +33,34 @@ export function slugId(name, existing) {
 
 /* ---- add ---------------------------------------------------------------- */
 
+export function isPoly(g) {
+  return Array.isArray(g.points) && g.points.length >= 3;
+}
+
+/* point inside container: polygon (ray cast) or rectangle */
+export function insideContainer(g, pos) {
+  const inBox =
+    pos.x >= g.position.x && pos.x <= g.position.x + g.size.w &&
+    pos.y >= g.position.y && pos.y <= g.position.y + g.size.h;
+  if (!isPoly(g)) return inBox;
+  if (!inBox) return false;
+  const px = pos.x - g.position.x, py = pos.y - g.position.y;
+  let hit = false;
+  const pts = g.points;
+  for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+    const a = pts[i], b = pts[j];
+    if (a.y > py !== b.y > py && px < ((b.x - a.x) * (py - a.y)) / (b.y - a.y) + a.x)
+      hit = !hit;
+  }
+  return hit;
+}
+
 function groupAt(cfg, pos, excludeId) {
-  /* innermost (smallest) group containing the point */
+  /* innermost (smallest bounding box) container containing the point */
   let best = null, bestArea = Infinity;
   for (const g of cfg.groups || []) {
     if (g.id === excludeId) continue;
-    if (
-      pos.x >= g.position.x && pos.x <= g.position.x + g.size.w &&
-      pos.y >= g.position.y && pos.y <= g.position.y + g.size.h
-    ) {
+    if (insideContainer(g, pos)) {
       const area = g.size.w * g.size.h;
       if (area < bestArea) { bestArea = area; best = g.id; }
     }
@@ -303,12 +322,40 @@ export function anchorOf(cfg, nodeId, port) {
   if (!n) return { x: 0, y: 0 };
   const { w, h } = nodeSize(n);
   const { x, y } = n.position;
-  switch (port) {
-    case "t": return { x: x + w / 2, y };
-    case "b": return { x: x + w / 2, y: y + h };
-    case "l": return { x, y: y + h / 2 };
-    default: return { x: x + w, y: y + h / 2 };
+  const side = port ? port[0] : "r";
+  const f = port && port[1] === "1" ? 0.25 : port && port[1] === "3" ? 0.75 : 0.5;
+  switch (side) {
+    case "t": return { x: x + w * f, y };
+    case "b": return { x: x + w * f, y: y + h };
+    case "l": return { x, y: y + h * f };
+    default: return { x: x + w, y: y + h * f };
   }
+}
+
+/* After a drag, nest an element under the innermost container beneath its
+   center (excluding itself and, for containers, its own descendants). */
+export function reparentByPosition(cfg, kind, id) {
+  const next = structuredClone(cfg);
+  const el =
+    kind === "group"
+      ? (next.groups || []).find((g) => g.id === id)
+      : next.nodes.find((n) => n.id === id);
+  if (!el) return cfg;
+  const size = kind === "group" ? el.size : nodeSize(el);
+  const center = { x: el.position.x + size.w / 2, y: el.position.y + size.h / 2 };
+  const banned = new Set(kind === "group" ? [id, ...descendantGroups(next, id)] : []);
+  let best = null, bestArea = Infinity;
+  for (const g of next.groups || []) {
+    if (banned.has(g.id)) continue;
+    if (insideContainer(g, center)) {
+      const area = g.size.w * g.size.h;
+      if (area < bestArea) { bestArea = area; best = g.id; }
+    }
+  }
+  if ((el.group || null) === best) return cfg;
+  if (best) el.group = best;
+  else delete el.group;
+  return next;
 }
 
 export function edgePoints(cfg, e) {
@@ -380,4 +427,84 @@ export function removeWaypoint(cfg, edgeId, index) {
   e.waypoints.splice(index, 1);
   if (e.waypoints.length === 0) delete e.waypoints;
   return next;
+}
+
+
+/* Re-anchor a polygon container so its points' bbox starts at (0,0);
+   absolute geometry (and members, which are absolute) are unaffected. */
+function normalizePoly(g) {
+  const minX = Math.min(...g.points.map((p) => p.x));
+  const minY = Math.min(...g.points.map((p) => p.y));
+  g.position = { x: g.position.x + minX, y: g.position.y + minY };
+  g.points = g.points.map((p) => ({ x: Math.round(p.x - minX), y: Math.round(p.y - minY) }));
+  g.size = {
+    w: Math.max(120, Math.max(...g.points.map((p) => p.x))),
+    h: Math.max(80, Math.max(...g.points.map((p) => p.y)))
+  };
+}
+
+export function moveVertex(cfg, gid, i, relPt) {
+  const next = structuredClone(cfg);
+  const g = (next.groups || []).find((x) => x.id === gid);
+  if (!g || !isPoly(g) || !g.points[i]) return cfg;
+  g.points[i] = { x: Math.round(relPt.x), y: Math.round(relPt.y) };
+  normalizePoly(g);
+  return next;
+}
+
+export function insertVertexAt(cfg, gid, i, relPt) {
+  const next = structuredClone(cfg);
+  const g = (next.groups || []).find((x) => x.id === gid);
+  if (!g || !isPoly(g)) return cfg;
+  g.points.splice(i + 1, 0, { x: Math.round(relPt.x), y: Math.round(relPt.y) });
+  normalizePoly(g);
+  return next;
+}
+
+export function removeVertex(cfg, gid, i) {
+  const next = structuredClone(cfg);
+  const g = (next.groups || []).find((x) => x.id === gid);
+  if (!g || !isPoly(g) || g.points.length <= 3) return cfg;
+  g.points.splice(i, 1);
+  normalizePoly(g);
+  return next;
+}
+
+/* Convex hull (monotone chain) of padded node corners -> polygon container
+   wrapped around the given components, which become its members. */
+export function wrapSelection(cfg, nodeIds, pad = 28) {
+  const next = structuredClone(cfg);
+  const nodes = next.nodes.filter((n) => nodeIds.includes(n.id));
+  if (!nodes.length) return { cfg, id: null };
+  const pts = [];
+  nodes.forEach((n) => {
+    const { w, h } = nodeSize(n);
+    const { x, y } = n.position;
+    pts.push(
+      { x: x - pad, y: y - pad }, { x: x + w + pad, y: y - pad },
+      { x: x + w + pad, y: y + h + pad }, { x: x - pad, y: y + h + pad }
+    );
+  });
+  pts.sort((a, b) => a.x - b.x || a.y - b.y);
+  const cross = (o, a, b) => (a.x - o.x) * (b.y - o.y) - (a.y - o.y) * (b.x - o.x);
+  const lower = [];
+  for (const p of pts) {
+    while (lower.length >= 2 && cross(lower[lower.length - 2], lower[lower.length - 1], p) <= 0) lower.pop();
+    lower.push(p);
+  }
+  const upper = [];
+  for (let i = pts.length - 1; i >= 0; i--) {
+    const p = pts[i];
+    while (upper.length >= 2 && cross(upper[upper.length - 2], upper[upper.length - 1], p) <= 0) upper.pop();
+    upper.push(p);
+  }
+  const hull = lower.slice(0, -1).concat(upper.slice(0, -1));
+
+  next.groups = next.groups || [];
+  const id = nextId("grp", allIds(next).groups);
+  const g = { id, label: "New Container", position: { x: 0, y: 0 }, size: { w: 0, h: 0 }, points: hull };
+  normalizePoly(g);
+  next.groups.push(g);
+  nodes.forEach((n) => (n.group = id));
+  return { cfg: next, id };
 }

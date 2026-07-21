@@ -1,5 +1,5 @@
 import React from "react";
-import { Handle, Position, NodeResizer } from "@xyflow/react";
+import { Handle, Position, NodeResizer, useReactFlow } from "@xyflow/react";
 
 export const DEFAULT_SIZE = { w: 150, h: 66 };
 export const TYPE_SIZE = { database: { w: 120, h: 92 } };
@@ -17,19 +17,29 @@ const SIDES = [
   ["l", Position.Left]
 ];
 
+/* three points per side: 25% / 50% / 75% */
+const PORT_DEFS = SIDES.flatMap(([side, pos]) => {
+  const horiz = side === "t" || side === "b";
+  return [
+    [`${side}1`, pos, { [horiz ? "left" : "top"]: "25%" }],
+    [side, pos, {}],
+    [`${side}3`, pos, { [horiz ? "left" : "top"]: "75%" }]
+  ];
+});
+
 function Ports({ editable }) {
   return (
     <>
-      {SIDES.map(([id, pos]) => (
+      {PORT_DEFS.map(([id, pos, style]) => (
         <React.Fragment key={id}>
           <Handle
-            type="target" id={`t-${id}`} position={pos}
+            type="target" id={`t-${id}`} position={pos} style={style}
             className={`port port-t ${editable ? "port-t-live" : ""}`}
             isConnectable={!!editable}
             isConnectableStart={false}
           />
           <Handle
-            type="source" id={`s-${id}`} position={pos}
+            type="source" id={`s-${id}`} position={pos} style={style}
             className={`port port-s ${editable ? "port-live" : ""}`}
             isConnectable={!!editable}
             isConnectableEnd={false}
@@ -155,15 +165,113 @@ export function ShapeNode({ data, selected, width, height }) {
 }
 
 export function GroupNode({ data, selected }) {
+  const { getZoom } = useReactFlow();
+  const [drag, setDrag] = React.useState(null); /* {i, pt, isNew} */
+  const dragRef = React.useRef(null);
+
+  const basePts = data.points;
+  const poly = Array.isArray(basePts) && basePts.length >= 3;
+  const pts = React.useMemo(() => {
+    if (!poly) return null;
+    if (!drag) return basePts;
+    const c = basePts.slice();
+    if (drag.isNew) c.splice(drag.i + 1, 0, drag.pt);
+    else c[drag.i] = drag.pt;
+    return c;
+  }, [poly, basePts, drag]);
+
+  const editingV = !!(data.editable && selected && poly);
+
+  const beginVertex = (i, isNew, startPt) => (e) => {
+    e.stopPropagation();
+    e.preventDefault();
+    e.currentTarget.setPointerCapture?.(e.pointerId);
+    dragRef.current = { sx: e.clientX, sy: e.clientY, orig: startPt, zoom: getZoom() || 1 };
+    setDrag({ i, isNew, pt: startPt });
+  };
+  const moveVertex = (e) => {
+    const d = dragRef.current;
+    if (!d) return;
+    e.stopPropagation();
+    setDrag((cur) =>
+      cur && {
+        ...cur,
+        pt: { x: d.orig.x + (e.clientX - d.sx) / d.zoom, y: d.orig.y + (e.clientY - d.sy) / d.zoom }
+      }
+    );
+  };
+  const endVertex = (commit) => (e) => {
+    const d = dragRef.current;
+    if (!d) return;
+    e.stopPropagation();
+    dragRef.current = null;
+    setDrag((cur) => {
+      if (cur && commit) {
+        if (cur.isNew) data.onVertexInsert?.(cur.i, cur.pt);
+        else data.onVertexMove?.(cur.i, cur.pt);
+      }
+      return null;
+    });
+  };
+
+  const w = data.size?.w || 0, h = data.size?.h || 0;
+  const ghosts =
+    editingV && !drag && pts
+      ? pts.map((p, i) => {
+          const q = pts[(i + 1) % pts.length];
+          return { i, x: (p.x + q.x) / 2, y: (p.y + q.y) / 2 };
+        })
+      : [];
+
   return (
-    <div className="group-node">
-      <NodeResizer
-        isVisible={!!(data.editable && selected)}
-        minWidth={120}
-        minHeight={80}
-        onResizeEnd={(_e, p) => data.onResizeEnd?.(p)}
-      />
+    <div className={`group-node ${poly ? "group-node-poly" : ""}`}>
+      {poly ? (
+        <svg
+          className="grp-svg"
+          width="100%" height="100%"
+          viewBox={`0 0 ${Math.max(1, w)} ${Math.max(1, h)}`}
+          preserveAspectRatio="none"
+        >
+          <polygon points={pts.map((p) => `${p.x},${p.y}`).join(" ")} className="grp-poly" />
+        </svg>
+      ) : (
+        <NodeResizer
+          isVisible={!!(data.editable && selected)}
+          minWidth={120}
+          minHeight={80}
+          onResizeEnd={(_e, p) => data.onResizeEnd?.(p)}
+        />
+      )}
       <span className="group-label" style={{ fontSize: data.fontSize }}>{data.label}</span>
+      {editingV &&
+        pts.map((p, i) => (
+          <div
+            key={`v${i}`}
+            className="gv-dot nodrag nopan"
+            style={{ left: p.x, top: p.y }}
+            title="Drag to move corner — double-click to remove"
+            onPointerDown={beginVertex(i, false, p)}
+            onPointerMove={moveVertex}
+            onPointerUp={endVertex(true)}
+            onPointerCancel={endVertex(false)}
+            onDoubleClick={(e) => {
+              e.stopPropagation();
+              data.onVertexRemove?.(i);
+            }}
+          />
+        ))}
+      {ghosts.map((g) => (
+        <div
+          key={`g${g.i}`}
+          className="gv-ghost nodrag nopan"
+          style={{ left: g.x, top: g.y }}
+          title="Drag to add a corner here"
+          onPointerDown={beginVertex(g.i, true, { x: g.x, y: g.y })}
+          onPointerMove={moveVertex}
+          onPointerUp={endVertex(true)}
+          onPointerCancel={endVertex(false)}
+        />
+      ))}
     </div>
   );
 }

@@ -104,6 +104,10 @@ export default function WaypointEdge(props) {
   };
 
   const commit = (d) => {
+    if (d.isLabel) {
+      data.onLabelMove?.({ x: d.pos.x - labelX, y: d.pos.y - labelY });
+      return;
+    }
     if (d.isNew) data.onWaypointInsertAt?.(d.index, d.pos);
     else data.onWaypointMove?.(d.index, d.pos);
   };
@@ -140,12 +144,31 @@ export default function WaypointEdge(props) {
         <EdgeLabelRenderer>
           {data.label && (
             <div
-              className={`edge-label ${data.dimmed ? "edge-label-dim" : ""}`}
+              className={`edge-label ${data.dimmed ? "edge-label-dim" : ""} ${editing ? "edge-label-grab nodrag nopan" : ""}`}
               style={{
-                ...at({ x: labelX, y: labelY }),
+                ...at(
+                  drag?.isLabel
+                    ? drag.pos
+                    : {
+                        x: labelX + (data.labelOffset?.x || 0),
+                        y: labelY + (data.labelOffset?.y || 0)
+                      }
+                ),
                 color: data.lit ? style?.stroke : undefined,
                 fontSize: data.fontSize
               }}
+              onPointerDown={
+                editing
+                  ? beginDrag({
+                      isLabel: true,
+                      pos: {
+                        x: labelX + (data.labelOffset?.x || 0),
+                        y: labelY + (data.labelOffset?.y || 0)
+                      }
+                    })
+                  : undefined
+              }
+              title={editing ? "Drag to reposition this label" : undefined}
             >
               {data.label}
             </div>
