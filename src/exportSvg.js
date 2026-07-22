@@ -381,15 +381,22 @@ ${edgeLabelParts.join("\n")}
  * so it survives hosts that strip <script> (Confluence, SharePoint).
  */
 export function buildStaticHtml(cfg, proc) {
-  const { svg, width, procMarkers } = buildDiagramSvg(cfg, null, { interactive: true });
+  const { svg, width, height, procMarkers } = buildDiagramSvg(cfg, null, { interactive: true });
+
+  const miniSvg = svg
+    .replace(/<style>[\s\S]*?<\/style>/, "")
+    .replace(/<defs>[\s\S]*?<\/defs>/, "")
+    .replace(/<title>[\s\S]*?<\/title>/g, "")
+    /* only the root tag loses its fixed size — inner shapes keep theirs */
+    .replace(/^<svg\b[^>]*>/, (tag) =>
+      tag.replace(/ (width|height)="[^"]*"/g, "").replace("<svg", '<svg class="mini"')
+    );
   const title = esc(cfg.meta?.title || "Interface Diagram");
 
+  const ZOOM_STEPS = [50, 75, 100, 125, 150, 175, 200, 250, 300, 400];
   const ZOOMS = [
-    ["fit", "fit width", null],
-    ["100", "100%", 1],
-    ["150", "150%", 1.5],
-    ["200", "200%", 2],
-    ["300", "300%", 3]
+    ...ZOOM_STEPS.map((p) => [String(p), p === 100 ? "100%" : `${p}%`, p / 100]),
+    ["fit", "fit", null]
   ];
 
   const radios =
@@ -397,7 +404,7 @@ export function buildStaticHtml(cfg, proc) {
     cfg.processes
       .map((p) => `<input type="radio" name="proc" id="r-${p.id}"${proc && proc.id === p.id ? " checked" : ""}>`)
       .join("") +
-    ZOOMS.map(([z], i) => `<input type="radio" name="zoom" id="z-${z}"${i === 0 ? " checked" : ""}>`).join("");
+    ZOOMS.map(([z]) => `<input type="radio" name="zoom" id="z-${z}"${z === "100" ? " checked" : ""}>`).join("");
 
   const groupChips =
     cfg.processes
@@ -409,11 +416,33 @@ export function buildStaticHtml(cfg, proc) {
 
   const zoomChips = ZOOMS.map(([z, name]) => `<label class="zg" for="z-${z}">${name}</label>`).join("");
 
+  /* Anchor-based navigation: each minimap cell is a link to an invisible
+     target sitting at that spot on the canvas. Following an in-page link
+     scrolls the nearest scrollable ancestor — no script needed. */
+  const COLS = 6, ROWS = 4;
+  const cells = [];
+  for (let r = 0; r < ROWS; r++)
+    for (let c = 0; c < COLS; c++) cells.push([r, c]);
+
+  const jumpTargets = cells
+    .map(
+      ([r, c]) =>
+        `<span class="jt" id="j${r}-${c}" style="left:${((c + 0.5) / COLS * 100).toFixed(2)}%;top:${((r + 0.5) / ROWS * 100).toFixed(2)}%"></span>`
+    )
+    .join("");
+
+  const jumpGrid = cells
+    .map(
+      ([r, c]) =>
+        `<a href="#j${r}-${c}" title="Jump here" style="left:${(c / COLS * 100).toFixed(2)}%;top:${(r / ROWS * 100).toFixed(2)}%;width:${(100 / COLS).toFixed(2)}%;height:${(100 / ROWS).toFixed(2)}%"></a>`
+    )
+    .join("");
+
   const procRules = cfg.processes
     .map((p) => {
       const c = p.color || "#2563eb";
       const m = procMarkers[p.id];
-      const S = `#r-${p.id}:checked ~ .wrap main svg`;
+      const S = `#r-${p.id}:checked ~ .wrap svg`;
       return `
 ${S} .el:not(.p-${p.id}){opacity:.12;filter:grayscale(.85)}
 ${S} g.node.p-${p.id} .shape,${S} g.node.p-${p.id} .stroke,${S} g.node.p-${p.id} .glyph{stroke:${c}}
@@ -432,7 +461,7 @@ ${S} g.grp.p-${p.id} polygon,${S} g.grp.p-${p.id} rect{stroke:${c}}
   const zoomRules = ZOOMS.filter(([, , f]) => f)
     .map(
       ([z, , f]) =>
-        `#z-${z}:checked ~ .wrap main svg{width:${Math.round(width * f)}px;max-width:none}
+        `#z-${z}:checked ~ .wrap .cv > svg{width:${Math.round(width * f)}px;max-width:none}
 #z-${z}:checked ~ .wrap aside label[for=z-${z}]{font-weight:bold;background:#fff;border-color:currentColor}`
     )
     .join("\n");
@@ -451,8 +480,10 @@ header{padding:12px 20px;border-bottom:2px solid #38404a;background:#fafaf7;flex
 h1{font-size:16px;margin:0;letter-spacing:.02em}
 .wrap{flex:1 1 auto;display:flex;min-height:0}
 main{flex:1 1 auto;overflow:auto;padding:20px}
-main svg{width:100%;height:auto;box-shadow:0 2px 10px rgba(0,0,0,.15);border-radius:8px;background:#f2f3ee;display:block}
-main svg .el{transition:opacity .18s ease}
+.cv{position:relative;display:inline-block;line-height:0}
+.cv > svg{width:${Math.round(width)}px;max-width:none;height:auto;box-shadow:0 2px 10px rgba(0,0,0,.15);border-radius:8px;background:#f2f3ee;display:block}
+.jt{position:absolute;width:1px;height:1px;scroll-margin:45vh 45vw}
+.cv svg .el{transition:opacity .18s ease}
 aside{flex:0 0 216px;overflow-y:auto;border-left:2px solid #38404a;background:#fafaf7;padding:14px}
 aside .sec{font-size:10px;text-transform:uppercase;letter-spacing:.12em;color:#5b6470;margin:0 0 8px}
 aside .sec+.sec{margin-top:18px}
@@ -464,13 +495,20 @@ aside .sec+.sec{margin-top:18px}
 #r-none:checked ~ .wrap aside label.all{font-weight:bold;background:#fff;border-color:currentColor}
 #z-fit:checked ~ .wrap aside label[for=z-fit]{font-weight:bold;background:#fff;border-color:currentColor}
 footer{padding:8px 20px;font-size:11px;color:#5b6470;border-top:1px solid #c9cdc4;background:#fafaf7;flex:0 0 auto}
-.zoombox{display:none;margin-bottom:18px}
-body.js .zoombox{display:block}
-body.js .zooms{display:none}
-#zslider{width:100%;margin:0 0 6px}
-.zval{display:flex;justify-content:space-between;align-items:center;font-size:11px;color:#5b6470}
-.zval button{font:inherit;cursor:pointer;border:1.5px solid #c9cdc4;border-radius:6px;background:#fff;padding:2px 8px}
-body.js main svg{width:var(--zw,100%);max-width:none}
+.wrap{position:relative}
+.minimap{
+  position:absolute;right:232px;bottom:16px;width:190px;
+  border:1.5px solid #38404a;border-radius:6px;background:#f2f3ee;
+  box-shadow:0 3px 12px rgba(0,0,0,.2);overflow:hidden;z-index:20;
+}
+.minimap svg{width:100%;height:auto;display:block;box-shadow:none;border-radius:0}
+.minimap text{display:none}
+.minimap .el{transition:none}
+.mm-grid{position:absolute;inset:0}
+.mm-grid a{position:absolute;display:block;border-radius:2px}
+.mm-grid a:hover{background:rgba(37,99,235,.22);box-shadow:inset 0 0 0 1.5px #2563eb}
+.zooms{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:18px}
+.zg{flex:1 1 44px;justify-content:center;padding:5px 4px;font-size:11px;text-align:center}
 ${procRules}
 ${zoomRules}
 </style>
@@ -479,40 +517,16 @@ ${zoomRules}
 ${radios}
 <header><h1>${title}</h1></header>
 <div class="wrap">
-<main>${svg}</main>
+<main id="canvas"><div class="cv">${svg}${jumpTargets}</div></main>
+<div class="minimap" title="Overview \u2014 click any area to jump there">${miniSvg}<div class="mm-grid">${jumpGrid}</div></div>
 <aside>
 <p class="sec">Groups</p>
 <div class="groups">${groupChips}</div>
 <p class="sec">Zoom</p>
-<div class="zoombox">
-  <input type="range" id="zslider" min="25" max="400" step="5" value="100" aria-label="Zoom">
-  <div class="zval"><span id="zout">fit width</span><button type="button" id="zreset">reset</button></div>
-</div>
 <div class="zooms">${zoomChips}</div>
 </aside>
 </div>
-<script>
-(function () {
-  var b = document.body, s = document.getElementById("zslider"),
-      o = document.getElementById("zout"), r = document.getElementById("zreset"),
-      base = ${Math.round(width)};
-  if (!s) return;
-  b.className += " js";
-  function apply() {
-    var pct = +s.value;
-    b.style.setProperty("--zw", Math.round(base * pct / 100) + "px");
-    o.textContent = pct + "%";
-  }
-  s.addEventListener("input", apply);
-  r.addEventListener("click", function () {
-    b.style.removeProperty("--zw");
-    s.value = 100;
-    o.textContent = "fit width";
-  });
-  b.style.removeProperty("--zw");
-})();
-</script>
-<footer>rev ${esc(cfg.meta?.version || "\u2014")} \u00b7 ${cfg.nodes.length} nodes \u00b7 ${cfg.edges.length} links \u00b7 click a group to highlight its path \u00b7 drag the zoom slider, then scroll the canvas to pan \u00b7 hover any element for details</footer>
+<footer>rev ${esc(cfg.meta?.version || "\u2014")} \u00b7 ${cfg.nodes.length} nodes \u00b7 ${cfg.edges.length} links \u00b7 click a group to highlight its path \u00b7 shown at actual size \u00b7 pick a zoom level, scroll to pan \u00b7 hover any element for details \u00b7 click the overview map to jump</footer>
 </body>
 </html>
 `;

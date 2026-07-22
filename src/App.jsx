@@ -251,13 +251,42 @@ function Tooltip({ tip }) {
 
 /* ---- app ---------------------------------------------------------------- */
 
-function download(filename, text, mime = "application/json") {
-  const url = URL.createObjectURL(new Blob([text], { type: mime }));
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  a.click();
-  URL.revokeObjectURL(url);
+const PICKER_TYPES = {
+  "application/json": { description: "JSON file", accept: { "application/json": [".json"] } },
+  "image/svg+xml": { description: "SVG image", accept: { "image/svg+xml": [".svg"] } },
+  "image/png": { description: "PNG image", accept: { "image/png": [".png"] } },
+  "text/html": { description: "HTML page", accept: { "text/html": [".html"] } }
+};
+
+/* Ask the browser for a save location when it supports the File System Access
+   API (Chrome/Edge); otherwise fall back to a plain download. Cancelling the
+   dialog is a no-op, not an error. */
+async function download(filename, data, mime = "application/json") {
+  const blob = data instanceof Blob ? data : new Blob([data], { type: mime });
+
+  if (typeof window.showSaveFilePicker === "function") {
+    try {
+      const handle = await window.showSaveFilePicker({
+        suggestedName: filename,
+        types: PICKER_TYPES[mime] ? [PICKER_TYPES[mime]] : []
+      });
+      const writable = await handle.createWritable();
+      await writable.write(blob);
+      await writable.close();
+      return true;
+    } catch (err) {
+      if (err && (err.name === "AbortError" || err.code === 20)) return false;
+      /* SecurityError etc. — fall through to the classic download */
+    }
+  }
+
+  const url = URL.createObjectURL(blob);
+  const el = document.createElement("a");
+  el.href = url;
+  el.download = filename;
+  el.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  return true;
 }
 
 export default function App() {
@@ -833,12 +862,7 @@ export default function App() {
       ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
       URL.revokeObjectURL(url);
       canvas.toBlob((blob) => {
-        const u = URL.createObjectURL(blob);
-        const aEl = document.createElement("a");
-        aEl.href = u;
-        aEl.download = `${exportName()}.png`;
-        aEl.click();
-        URL.revokeObjectURL(u);
+        download(`${exportName()}.png`, blob, "image/png");
       }, "image/png");
     };
     img.onerror = () => {
