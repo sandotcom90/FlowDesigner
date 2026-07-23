@@ -283,6 +283,55 @@ export function applyNodeResize(cfg, nodeId, p) {
   return next;
 }
 
+/* Resize every selected element by the same factor as the one being dragged.
+   The dragged element gets the exact geometry from the handle; the rest keep
+   their own proportions, scaled by the same ratio and anchored at their
+   top-left so alignment is preserved. */
+export function applyMultiResize(cfg, kind, id, p, sel) {
+  const first =
+    kind === "group" ? applyGroupResize(cfg, id, p) : applyNodeResize(cfg, id, p);
+
+  const prev =
+    kind === "group"
+      ? (cfg.groups || []).find((g) => g.id === id)
+      : cfg.nodes.find((n) => n.id === id);
+  if (!prev) return first;
+
+  const prevSize = kind === "group" ? prev.size : nodeSize(prev);
+  const sx = p.width / prevSize.w;
+  const sy = p.height / prevSize.h;
+  if (!isFinite(sx) || !isFinite(sy) || sx <= 0 || sy <= 0) return first;
+  if (Math.abs(sx - 1) < 0.002 && Math.abs(sy - 1) < 0.002) return first;
+
+  const next = structuredClone(first);
+  const nodeIds = new Set((sel.nodes || []).filter((n) => !(kind === "node" && n === id)));
+  const grpIds = new Set((sel.groups || []).filter((g) => !(kind === "group" && g === id)));
+
+  next.nodes.forEach((n) => {
+    if (!nodeIds.has(n.id)) return;
+    const s = nodeSize(n);
+    n.size = {
+      w: Math.max(70, Math.round(s.w * sx)),
+      h: Math.max(40, Math.round(s.h * sy))
+    };
+  });
+
+  (next.groups || []).forEach((g) => {
+    if (!grpIds.has(g.id)) return;
+    const w = Math.max(120, Math.round(g.size.w * sx));
+    const h = Math.max(80, Math.round(g.size.h * sy));
+    if (Array.isArray(g.points) && g.points.length >= 3) {
+      const fx = w / g.size.w, fy = h / g.size.h;
+      g.points = g.points.map((pt) => ({ x: Math.round(pt.x * fx), y: Math.round(pt.y * fy) }));
+      if (g.labelPos)
+        g.labelPos = { x: Math.round(g.labelPos.x * fx), y: Math.round(g.labelPos.y * fy) };
+    }
+    g.size = { w, h };
+  });
+
+  return next;
+}
+
 export function applyGroupResize(cfg, groupId, p) {
   const next = structuredClone(cfg);
   const g = (next.groups || []).find((x) => x.id === groupId);

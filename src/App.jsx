@@ -17,7 +17,7 @@ import ProcessBuilder from "./editor/ProcessBuilder";
 import {
   addNode, addGroup, addEdge, deleteNode, deleteEdge, deleteGroup, deleteProcess,
   renameId, updateElement, insertWaypoint, insertWaypointAt, moveWaypoint, removeWaypoint,
-  reverseEdge, deleteMany, applyNodeResize, applyGroupResize, setFontSizes, reparentByPosition,
+  reverseEdge, deleteMany, applyNodeResize, applyGroupResize, applyMultiResize, setFontSizes, reparentByPosition,
   addPolyGroup, wrapSelection, setLabelPos, portsForNode,
   descendantGroups, allIds, slugId, edgePoints, TYPE_LABEL
 } from "./editor/ops";
@@ -377,11 +377,36 @@ export default function App() {
     []
   );
 
+  /* the resize handlers are memoised once, so the live selection is read
+     through a ref rather than captured in their closure */
+  const selectionRef = useRef(null);
+  selectionRef.current = selection;
+
+  const resizeTogether = (kind, id) => {
+    const sel = selectionRef.current;
+    if (!sel || sel.kind !== "multi") return null;
+    const eff = {
+      nodes: sel.use.nodes ? sel.nodes : [],
+      groups: sel.use.groups ? sel.groups : []
+    };
+    const total = eff.nodes.length + eff.groups.length;
+    const inSel = kind === "node" ? eff.nodes.includes(id) : eff.groups.includes(id);
+    return total > 1 && inSel ? eff : null;
+  };
+
   const rsHandlers = useMemo(
     () => ({
       groupLabel: (gid, p) => setConfig((c) => setLabelPos(c, gid, p)),
-      node: (id, p) => setConfig((c) => applyNodeResize(c, id, p)),
-      group: (id, p) => setConfig((c) => applyGroupResize(c, id, p))
+      node: (id, p) =>
+        setConfig((c) => {
+          const eff = resizeTogether("node", id);
+          return eff ? applyMultiResize(c, "node", id, p, eff) : applyNodeResize(c, id, p);
+        }),
+      group: (id, p) =>
+        setConfig((c) => {
+          const eff = resizeTogether("group", id);
+          return eff ? applyMultiResize(c, "group", id, p, eff) : applyGroupResize(c, id, p);
+        })
     }),
     []
   );

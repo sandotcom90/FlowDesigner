@@ -2,7 +2,7 @@ import { getSmoothStepPath, Position } from "@xyflow/react";
 import { nodeSize } from "./nodes";
 import { anchorOf, TYPE_LABEL, labelAnchor } from "./editor/ops";
 
-export const FS = 2;           /* exported labels render at 2x the on-canvas size */
+export const FS = 1;           /* exported labels match the on-canvas size */
 const NODE_FS = 12.5, EDGE_FS = 10.5, GRP_FS = 10.5;
 
 const POS = { t: Position.Top, r: Position.Right, b: Position.Bottom, l: Position.Left };
