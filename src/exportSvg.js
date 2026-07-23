@@ -2,13 +2,16 @@ import { getSmoothStepPath, Position } from "@xyflow/react";
 import { nodeSize } from "./nodes";
 import { anchorOf, TYPE_LABEL, labelAnchor } from "./editor/ops";
 
+export const FS = 2;           /* exported labels render at 2x the on-canvas size */
+const NODE_FS = 12.5, EDGE_FS = 10.5, GRP_FS = 10.5;
+
 const POS = { t: Position.Top, r: Position.Right, b: Position.Bottom, l: Position.Left };
 const GRAY = "#5b6470";
 const PAPER = "#f2f3ee";
 
 /* SVG <text> never wraps, so labels are split into tspans here. Monospace
    glyphs are ~0.6em wide, which makes the fit predictable without measuring. */
-function wrapLines(text, fontSize, maxWidth) {
+function wrapLines(fontSize, text, maxWidth) {
   const raw = String(text ?? "").split(/\r?\n/);
   if (!maxWidth || maxWidth <= 0) return raw;
   const maxChars = Math.max(4, Math.floor(maxWidth / (fontSize * 0.6)));
@@ -158,6 +161,22 @@ function membershipMaps(cfg) {
 
 const pcls = (m, id) => (m[id] || []).map((p) => ` p-${p}`).join("");
 
+/* Sanitisers (Confluence, SharePoint) sometimes drop <style> blocks. Mirroring
+   the stylesheet as presentation attributes keeps the picture correct if that
+   happens; CSS still wins where it survives, so highlighting is unaffected. */
+function inlinePresentation(svg) {
+  const INK = "#38404a";
+  return svg
+    .replace(/class="shape"/g, `class="shape" fill="#ffffff" stroke="${INK}" stroke-width="1.5"`)
+    .replace(/class="shape dashed"/g, `class="shape dashed" fill="#ffffff" stroke="${INK}" stroke-width="1.5" stroke-dasharray="6 4"`)
+    .replace(/class="stroke"/g, `class="stroke" fill="none" stroke="${INK}" stroke-width="1.5"`)
+    .replace(/class="glyph"/g, `class="glyph" fill="none" stroke="${INK}" stroke-width="1.5"`)
+    .replace(/class="dot"/g, `class="dot" fill="${INK}"`)
+    .replace(/class="nlabel"/g, `class="nlabel" font-family="Consolas,monospace" font-size="${NODE_FS * FS}px" fill="#22272e"`)
+    .replace(/class="elabel([^"]*)"/g, (m, rest) => `class="elabel${rest}" font-family="Consolas,monospace" font-size="${EDGE_FS * FS}px" fill="${GRAY}"`)
+    .replace(/class="glabel"/g, `class="glabel" font-family="Consolas,monospace" font-size="${GRP_FS * FS}px" fill="${GRAY}"`);
+}
+
 export function buildDiagramSvg(cfg, proc, opts = {}) {
   const inter = !!opts.interactive;
   if (inter) proc = null;
@@ -239,10 +258,10 @@ export function buildDiagramSvg(cfg, proc, opts = {}) {
       ly += e.labelOffset?.y || 0;
       edgeLabelParts.push(
         `<text x="${lx}" y="${ly}" class="elabel${inter ? ` el${pcls(maps.edgeP, e.id)}` : ""}" text-anchor="middle" dominant-baseline="central"${
-          e.fontSize ? ` font-size="${e.fontSize}px"` : ""
+          e.fontSize ? ` font-size="${e.fontSize * FS}px"` : ""
         }${lit ? ` fill="${color}"` : ""}${dim ? ' opacity="0.14"' : ""}>${
           String(e.label).includes("\n")
-            ? tspans(String(e.label).split(/\r?\n/), lx, e.fontSize || 10.5)
+            ? tspans(String(e.label).split(/\r?\n/), lx, (e.fontSize || EDGE_FS) * FS)
             : esc(e.label)
         }</text>`
       );
@@ -291,12 +310,12 @@ ${
       }
 ${(() => {
         const a = labelAnchor(g);
-        const gfs = g.fontSize || 10.5;
+        const gfs = (g.fontSize || GRP_FS) * FS;
         const gw = a.center ? (a.width ? a.width - 10 : g.size.w - 16) : g.size.w - 24;
-        const glines = wrapLines(g.label.toUpperCase(), gfs * 1.15, gw);
+        const glines = wrapLines(gfs * 1.15, g.label.toUpperCase(), gw);
         return `<text x="${g.position.x + a.x}" y="${g.position.y + a.y}" class="glabel"${
           a.center ? ' text-anchor="middle" dominant-baseline="central"' : ""
-        }${g.fontSize ? ` font-size="${g.fontSize}px"` : ""}>${
+        }${g.fontSize ? ` font-size="${g.fontSize * FS}px"` : ""}>${
           glines.length > 1
             ? tspans(glines, g.position.x + a.x, gfs)
             : esc(g.label.toUpperCase())
@@ -319,10 +338,10 @@ ${(() => {
     }>
 <title>${esc(tt)}</title>
 ${shapeMarkup(n.type, w, h)}
-<text x="${w / 2 + dx}" y="${h / 2 + dy}" class="nlabel" text-anchor="middle" dominant-baseline="central"${n.fontSize ? ` font-size="${n.fontSize}px"` : ""}>${tspans(
-      wrapLines(n.label, n.fontSize || 12.5, w - 18 - Math.abs(dx) * 2),
+<text x="${w / 2 + dx}" y="${h / 2 + dy}" class="nlabel" text-anchor="middle" dominant-baseline="central"${n.fontSize ? ` font-size="${n.fontSize * FS}px"` : ""}>${tspans(
+      wrapLines((n.fontSize || NODE_FS) * FS, n.label, w - 18 - Math.abs(dx) * 2),
       w / 2 + dx,
-      n.fontSize || 12.5
+      (n.fontSize || NODE_FS) * FS
     )}</text>
 </g>`;
   });
@@ -353,10 +372,10 @@ ${shapeMarkup(n.type, w, h)}
 .lit .dot{fill:${color}}
 .dim{opacity:0.14}
 text{font-family:ui-monospace,'Cascadia Mono','SF Mono',Consolas,'Liberation Mono',monospace}
-.nlabel{font-size:12.5px;fill:#22272e}
+.nlabel{font-size:${NODE_FS * FS}px;fill:#22272e}
 .lit .nlabel{font-weight:600}
-.elabel{font-size:10.5px;fill:${GRAY};paint-order:stroke;stroke:${PAPER};stroke-width:5px;stroke-linejoin:round}
-.glabel{font-size:10.5px;fill:${GRAY};letter-spacing:1.4px}
+.elabel{font-size:${EDGE_FS * FS}px;fill:${GRAY};paint-order:stroke;stroke:${PAPER};stroke-width:${5 * FS}px;stroke-linejoin:round}
+.glabel{font-size:${GRP_FS * FS}px;fill:${GRAY};letter-spacing:${1.4 * FS}px}
 </style>
 <defs>
 <pattern id="dots" width="22" height="22" patternUnits="userSpaceOnUse"><circle cx="1.4" cy="1.4" r="1.4" fill="#c9cdc4"/></pattern>
@@ -371,7 +390,8 @@ ${nodeParts.join("\n")}
 ${edgeLabelParts.join("\n")}
 </svg>`;
 
-  return { svg, width, height, procMarkers };
+  const hardened = inlinePresentation(svg);
+  return { svg: hardened, width, height, procMarkers };
 }
 
 
@@ -410,11 +430,11 @@ export function buildStaticHtml(cfg, proc) {
     cfg.processes
       .map(
         (p) =>
-          `<label class="lg" for="r-${p.id}" title="${esc(p.description || p.name)}"><i style="background:${p.color || "#2563eb"}"></i>${esc(p.name)}</label>`
+          `<label class="lg" for="r-${p.id}" title="${esc(p.description || p.name)}" style="display:flex;align-items:center;padding:6px 10px;margin-bottom:6px;border:1.5px solid #c9cdc4;border-radius:8px;font-size:12px;cursor:pointer"><i style="background:${p.color || "#2563eb"};display:inline-block;flex:0 0 10px;width:10px;height:10px;border-radius:3px;margin-right:8px"></i>${esc(p.name)}</label>`
       )
-      .join("") + `<label class="lg all" for="r-none">show all</label>`;
+      .join("") + `<label class="lg all" for="r-none" style="display:flex;align-items:center;padding:6px 10px;border:1.5px solid #c9cdc4;border-radius:8px;font-size:12px;cursor:pointer;color:#5b6470">show all</label>`;
 
-  const zoomChips = ZOOMS.map(([z, name]) => `<label class="zg" for="z-${z}">${name}</label>`).join("");
+  const zoomChips = ZOOMS.map(([z, name]) => `<label class="zg" for="z-${z}" style="display:inline-block;padding:5px 8px;margin:0 4px 4px 0;border:1.5px solid #c9cdc4;border-radius:8px;font-size:11px;cursor:pointer">${name}</label>`).join("");
 
   /* Anchor-based navigation: each minimap cell is a link to an invisible
      target sitting at that spot on the canvas. Following an in-page link
@@ -494,6 +514,7 @@ aside .sec+.sec{margin-top:18px}
 .lg.all{color:#5b6470}
 #r-none:checked ~ .wrap aside label.all{font-weight:bold;background:#fff;border-color:currentColor}
 #z-fit:checked ~ .wrap aside label[for=z-fit]{font-weight:bold;background:#fff;border-color:currentColor}
+.nocss{display:none}
 footer{padding:8px 20px;font-size:11px;color:#5b6470;border-top:1px solid #c9cdc4;background:#fafaf7;flex:0 0 auto}
 .wrap{position:relative}
 .minimap{
@@ -515,11 +536,14 @@ ${zoomRules}
 </head>
 <body>
 ${radios}
-<header><h1>${title}</h1></header>
-<div class="wrap">
-<main id="canvas"><div class="cv">${svg}${jumpTargets}</div></main>
-<div class="minimap" title="Overview \u2014 click any area to jump there">${miniSvg}<div class="mm-grid">${jumpGrid}</div></div>
-<aside>
+<p class="nocss" style="margin:0;padding:10px 20px;background:#fff6d5;border-bottom:1px solid #e0cf7a;font-family:Consolas,monospace;font-size:12px">
+  Interactive features need this page's stylesheet. If you are seeing this bar, the host stripped it \u2014 open the file directly or embed it with an iframe macro instead of pasting the markup.
+</p>
+<header class="hd" style="padding:12px 20px;border-bottom:2px solid #38404a;background:#fafaf7"><h1 style="font-size:16px;margin:0;font-family:Consolas,monospace">${title}</h1></header>
+<div class="wrap" style="display:flex;align-items:flex-start;gap:16px">
+<main id="canvas" style="flex:1 1 auto;overflow:auto;padding:16px"><div class="cv" style="position:relative;display:inline-block">${svg}${jumpTargets}</div></main>
+<div class="minimap" title="Overview \u2014 click any area to jump there" style="position:absolute;right:232px;bottom:16px;width:190px;border:1.5px solid #38404a;border-radius:6px;background:#f2f3ee;overflow:hidden">${miniSvg}<div class="mm-grid">${jumpGrid}</div></div>
+<aside style="flex:0 0 216px;padding:14px;border-left:2px solid #38404a;background:#fafaf7;font-family:Consolas,monospace">
 <p class="sec">Groups</p>
 <div class="groups">${groupChips}</div>
 <p class="sec">Zoom</p>
