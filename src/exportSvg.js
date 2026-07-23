@@ -189,6 +189,7 @@ function inlinePresentation(svg) {
     let extra = "";
     for (const [k, v] of Object.entries(preset[1])) {
       if (new RegExp(`\\s${k}="`).test(attrs)) continue;   /* already set — leave it */
+      if (k === "font-size" && /\sstyle="[^"]*font-size/.test(attrs)) continue;
       extra += ` ${k}="${v}"`;
     }
     if (tokens.includes("dashed") && !/\sstroke-dasharray="/.test(attrs))
@@ -278,7 +279,7 @@ export function buildDiagramSvg(cfg, proc, opts = {}) {
       ly += e.labelOffset?.y || 0;
       edgeLabelParts.push(
         `<text x="${lx}" y="${ly}" class="elabel${inter ? ` el${pcls(maps.edgeP, e.id)}` : ""}" text-anchor="middle" dominant-baseline="central"${
-          e.fontSize ? ` font-size="${e.fontSize * FS}px"` : ""
+          e.fontSize ? ` style="font-size:${e.fontSize * FS}px"` : ""
         }${lit ? ` fill="${color}"` : ""}${dim ? ' opacity="0.14"' : ""}>${
           String(e.label).includes("\n")
             ? tspans(String(e.label).split(/\r?\n/), lx, (e.fontSize || EDGE_FS) * FS)
@@ -335,7 +336,7 @@ ${(() => {
         const glines = wrapLines(gfs * 1.15, g.label.toUpperCase(), gw);
         return `<text x="${g.position.x + a.x}" y="${g.position.y + a.y}" class="glabel"${
           a.center ? ' text-anchor="middle" dominant-baseline="central"' : ""
-        }${g.fontSize ? ` font-size="${g.fontSize * FS}px"` : ""}>${
+        }${g.fontSize ? ` style="font-size:${g.fontSize * FS}px"` : ""}>${
           glines.length > 1
             ? tspans(glines, g.position.x + a.x, gfs)
             : esc(g.label.toUpperCase())
@@ -358,7 +359,7 @@ ${(() => {
     }>
 <title>${esc(tt)}</title>
 ${shapeMarkup(n.type, w, h)}
-<text x="${w / 2 + dx}" y="${h / 2 + dy}" class="nlabel" text-anchor="middle" dominant-baseline="central"${n.fontSize ? ` font-size="${n.fontSize * FS}px"` : ""}>${tspans(
+<text x="${w / 2 + dx}" y="${h / 2 + dy}" class="nlabel" text-anchor="middle" dominant-baseline="central"${n.fontSize ? ` style="font-size:${n.fontSize * FS}px"` : ""}>${tspans(
       wrapLines((n.fontSize || NODE_FS) * FS, n.label, w - 18 - Math.abs(dx) * 2),
       w / 2 + dx,
       (n.fontSize || NODE_FS) * FS

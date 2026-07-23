@@ -739,7 +739,9 @@ export default function App() {
         color: builder.color,
         ...(builder.description.trim() ? { description: builder.description.trim() } : {}),
         nodes: [...builder.nodes],
-        ...(builder.edges.size ? { edges: [...builder.edges] } : {})
+        /* always explicit: an omitted list means "derive them", so an empty
+           one has to be written or deselected links reappear on save */
+        edges: [...builder.edges]
       };
       const i = next.processes.findIndex((p) => p.id === builder.origId);
       if (i >= 0) next.processes[i] = proc;
