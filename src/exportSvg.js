@@ -163,18 +163,38 @@ const pcls = (m, id) => (m[id] || []).map((p) => ` p-${p}`).join("");
 
 /* Sanitisers (Confluence, SharePoint) sometimes drop <style> blocks. Mirroring
    the stylesheet as presentation attributes keeps the picture correct if that
-   happens; CSS still wins where it survives, so highlighting is unaffected. */
+   happens; CSS still wins where it survives, so highlighting is unaffected.
+   Attributes already on the element (e.g. a per-element font-size) are never
+   touched — writing them twice would make the SVG invalid XML. */
 function inlinePresentation(svg) {
   const INK = "#38404a";
-  return svg
-    .replace(/class="shape"/g, `class="shape" fill="#ffffff" stroke="${INK}" stroke-width="1.5"`)
-    .replace(/class="shape dashed"/g, `class="shape dashed" fill="#ffffff" stroke="${INK}" stroke-width="1.5" stroke-dasharray="6 4"`)
-    .replace(/class="stroke"/g, `class="stroke" fill="none" stroke="${INK}" stroke-width="1.5"`)
-    .replace(/class="glyph"/g, `class="glyph" fill="none" stroke="${INK}" stroke-width="1.5"`)
-    .replace(/class="dot"/g, `class="dot" fill="${INK}"`)
-    .replace(/class="nlabel"/g, `class="nlabel" font-family="Consolas,monospace" font-size="${NODE_FS * FS}px" fill="#22272e"`)
-    .replace(/class="elabel([^"]*)"/g, (m, rest) => `class="elabel${rest}" font-family="Consolas,monospace" font-size="${EDGE_FS * FS}px" fill="${GRAY}"`)
-    .replace(/class="glabel"/g, `class="glabel" font-family="Consolas,monospace" font-size="${GRP_FS * FS}px" fill="${GRAY}"`);
+  const MONO = "Consolas,'Cascadia Mono',monospace";
+  const presets = [
+    ["dot", { fill: INK }],
+    ["shape", { fill: "#ffffff", stroke: INK, "stroke-width": "1.5" }],
+    ["stroke", { fill: "none", stroke: INK, "stroke-width": "1.5" }],
+    ["glyph", { fill: "none", stroke: INK, "stroke-width": "1.5" }],
+    ["nlabel", { "font-family": MONO, "font-size": `${NODE_FS * FS}px`, fill: "#22272e" }],
+    ["elabel", { "font-family": MONO, "font-size": `${EDGE_FS * FS}px`, fill: GRAY }],
+    ["glabel", { "font-family": MONO, "font-size": `${GRP_FS * FS}px`, fill: GRAY }]
+  ];
+
+  return svg.replace(/<([a-zA-Z][\w-]*)((?:"[^"]*"|[^>"])*?)(\/?)>/g, (tag, name, attrs, selfClose) => {
+    const cm = attrs.match(/\sclass="([^"]*)"/);
+    if (!cm) return tag;
+    const tokens = cm[1].split(/\s+/);
+    const preset = presets.find(([k]) => tokens.includes(k));
+    if (!preset) return tag;
+
+    let extra = "";
+    for (const [k, v] of Object.entries(preset[1])) {
+      if (new RegExp(`\\s${k}="`).test(attrs)) continue;   /* already set — leave it */
+      extra += ` ${k}="${v}"`;
+    }
+    if (tokens.includes("dashed") && !/\sstroke-dasharray="/.test(attrs))
+      extra += ' stroke-dasharray="6 4"';
+    return extra ? `<${name}${attrs}${extra}${selfClose}>` : tag;
+  });
 }
 
 export function buildDiagramSvg(cfg, proc, opts = {}) {
