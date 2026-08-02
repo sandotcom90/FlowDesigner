@@ -110,6 +110,31 @@ function shapeMarkup(type, w, h) {
       return `<rect x="1.5" y="1.5" width="${w - 3}" height="${h - 3}" rx="${(h - 3) / 2}" class="shape"/>
 <circle cx="24" cy="${h / 2 - 7}" r="5.5" class="glyph"/>
 <path d="M 14 ${h / 2 + 12} a 10 8 0 0 1 20 0" class="glyph"/>`;
+    case "rect":
+      return `<rect x="1.5" y="1.5" width="${w - 3}" height="${h - 3}" class="shape"/>`;
+    case "stadium":
+      return `<rect x="1.5" y="1.5" width="${w - 3}" height="${h - 3}" rx="${(h - 3) / 2}" class="shape"/>`;
+    case "subroutine":
+      return `<rect x="1.5" y="1.5" width="${w - 3}" height="${h - 3}" class="shape"/>
+<line x1="10" y1="1.5" x2="10" y2="${h - 1.5}" class="stroke"/>
+<line x1="${w - 10}" y1="1.5" x2="${w - 10}" y2="${h - 1.5}" class="stroke"/>`;
+    case "circle":
+      return `<ellipse cx="${w / 2}" cy="${h / 2}" rx="${w / 2 - 1.5}" ry="${h / 2 - 1.5}" class="shape"/>`;
+    case "circle2":
+      return `<ellipse cx="${w / 2}" cy="${h / 2}" rx="${w / 2 - 1.5}" ry="${h / 2 - 1.5}" class="shape"/>
+<ellipse cx="${w / 2}" cy="${h / 2}" rx="${w / 2 - 6.5}" ry="${h / 2 - 6.5}" class="stroke" fill="none"/>`;
+    case "diamond":
+      return `<polygon points="${w / 2},1.5 ${w - 1.5},${h / 2} ${w / 2},${h - 1.5} 1.5,${h / 2}" class="shape"/>`;
+    case "parallelogram":
+      return `<polygon points="16,1.5 ${w - 1.5},1.5 ${w - 16},${h - 1.5} 1.5,${h - 1.5}" class="shape"/>`;
+    case "parallelogram2":
+      return `<polygon points="1.5,1.5 ${w - 16},1.5 ${w - 1.5},${h - 1.5} 16,${h - 1.5}" class="shape"/>`;
+    case "trapezoid":
+      return `<polygon points="16,1.5 ${w - 16},1.5 ${w - 1.5},${h - 1.5} 1.5,${h - 1.5}" class="shape"/>`;
+    case "trapezoid2":
+      return `<polygon points="1.5,1.5 ${w - 1.5},1.5 ${w - 16},${h - 1.5} 16,${h - 1.5}" class="shape"/>`;
+    case "flag":
+      return `<polygon points="1.5,1.5 ${w - 1.5},1.5 ${w - 1.5},${h - 1.5} 1.5,${h - 1.5} 14,${h / 2}" class="shape"/>`;
     default: /* service */
       return `<rect x="1.5" y="1.5" width="${w - 3}" height="${h - 3}" rx="10" class="shape"/>`;
   }

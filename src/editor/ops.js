@@ -4,7 +4,12 @@ export const ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]*$/;
 
 export const TYPE_LABEL = {
   ui: "UI", service: "Component", database: "Database", broker: "Broker",
-  etl: "Process/Service", auth: "Auth", file: "File", external: "External", user: "User"
+  etl: "Process/Service", auth: "Auth", file: "File", external: "External", user: "User",
+  /* geometric shapes (Mermaid flowchart set) */
+  rect: "Rectangle", stadium: "Stadium", subroutine: "Subroutine",
+  circle: "Circle", circle2: "Double Circle", diamond: "Decision",
+  parallelogram: "Input/Output", parallelogram2: "I/O (alt)",
+  trapezoid: "Trapezoid", trapezoid2: "Trapezoid (alt)", flag: "Flag"
 };
 export const NODE_TYPES = Object.keys(TYPE_LABEL);
 

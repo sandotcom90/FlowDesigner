@@ -94,7 +94,7 @@
           "id": { "$ref": "#/definitions/id" },
           "type": {
             "type": "string",
-            "enum": ["ui", "service", "database", "broker", "etl", "auth", "file", "external", "user"]
+            "enum": ["ui", "service", "database", "broker", "etl", "auth", "file", "external", "user", "rect", "stadium", "subroutine", "circle", "circle2", "diamond", "parallelogram", "parallelogram2", "trapezoid", "trapezoid2", "flag"]
           },
           "label": { "type": "string" },
           "position": {

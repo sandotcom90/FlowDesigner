@@ -25,6 +25,28 @@ function Mini({ type }) {
           <polygon points="2,2 32,2 38,12 32,22 2,22 8,12" {...s} />
         </svg>
       );
+    case "rect":
+      return <svg width={w} height={h} viewBox="0 0 40 24"><rect x="2" y="2" width="36" height="20" {...s} /></svg>;
+    case "stadium":
+      return <svg width={w} height={h} viewBox="0 0 40 24"><rect x="2" y="2" width="36" height="20" rx="10" {...s} /></svg>;
+    case "subroutine":
+      return <svg width={w} height={h} viewBox="0 0 40 24"><rect x="2" y="2" width="36" height="20" {...s} /><line x1="7" y1="2" x2="7" y2="22" {...s} /><line x1="33" y1="2" x2="33" y2="22" {...s} /></svg>;
+    case "circle":
+      return <svg width={w} height={h} viewBox="0 0 40 24"><ellipse cx="20" cy="12" rx="11" ry="10" {...s} /></svg>;
+    case "circle2":
+      return <svg width={w} height={h} viewBox="0 0 40 24"><ellipse cx="20" cy="12" rx="11" ry="10" {...s} /><ellipse cx="20" cy="12" rx="7.5" ry="6.5" {...s} /></svg>;
+    case "diamond":
+      return <svg width={w} height={h} viewBox="0 0 40 24"><polygon points="20,2 38,12 20,22 2,12" {...s} /></svg>;
+    case "parallelogram":
+      return <svg width={w} height={h} viewBox="0 0 40 24"><polygon points="9,2 38,2 31,22 2,22" {...s} /></svg>;
+    case "parallelogram2":
+      return <svg width={w} height={h} viewBox="0 0 40 24"><polygon points="2,2 31,2 38,22 9,22" {...s} /></svg>;
+    case "trapezoid":
+      return <svg width={w} height={h} viewBox="0 0 40 24"><polygon points="9,2 31,2 38,22 2,22" {...s} /></svg>;
+    case "trapezoid2":
+      return <svg width={w} height={h} viewBox="0 0 40 24"><polygon points="2,2 38,2 31,22 9,22" {...s} /></svg>;
+    case "flag":
+      return <svg width={w} height={h} viewBox="0 0 40 24"><polygon points="2,2 38,2 38,22 2,22 9,12" {...s} /></svg>;
     case "ui":
       return (
         <svg width={w} height={h} viewBox="0 0 40 24">

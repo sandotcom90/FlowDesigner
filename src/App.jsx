@@ -9,6 +9,7 @@ import { ShapeNode, GroupNode, UnderlayNode, DrawPreviewNode, nodeSize } from ".
 import WaypointEdge from "./WaypointEdge";
 import { validateConfig } from "./validate";
 import { buildDiagramSvg, buildStaticHtml } from "./exportSvg";
+import { mermaidToConfig } from "./mermaid";
 import sampleConfig from "./sample-config.json";
 import schema from "./schema.json";
 import Palette from "./editor/Palette";
@@ -337,6 +338,25 @@ export default function App() {
   const [selectedProc, setSelectedProc] = useState(null);
   const [selection, setSelection] = useState(null); /* {kind, id} */
   const [builder, setBuilder] = useState(null);
+  const [mermaid, setMermaid] = useState(null); /* {text, errors, warnings} */
+
+  const loadMermaid = useCallback(() => {
+    const r = mermaidToConfig(mermaid?.text || "");
+    if (r.error) {
+      setMermaid((m) => ({ ...m, errors: [r.error], warnings: [] }));
+      return;
+    }
+    const v = validateConfig(r.config);
+    if (!v.ok) {
+      setMermaid((m) => ({ ...m, errors: v.errors.slice(0, 8), warnings: r.warnings }));
+      return;
+    }
+    setConfig(r.config);           /* through history — Ctrl+Z restores */
+    setSelection(null);
+    setSelectedProc(null);
+    setBuilder(null);
+    setMermaid(null);
+  }, [mermaid, setConfig]);
   const [underlay, setUnderlay] = useState(null);
   const [errors, setErrors] = useState([]);
   const [loadedName, setLoadedName] = useState("sample (embedded)");
@@ -951,6 +971,41 @@ export default function App() {
 
   return (
     <div className="frame" onMouseMove={onMouseMove}>
+      {mermaid && (
+        <div className="modal-veil" onClick={(e) => { if (e.target === e.currentTarget) setMermaid(null); }}>
+          <div className="modal">
+            <div className="modal-head">Load a Mermaid flowchart</div>
+            <p className="modal-note">
+              Paste <b>flowchart</b> / <b>graph</b> code. Nodes, links, labels and
+              subgraphs (as containers) are imported and laid out automatically.
+              Sequence, gantt and other diagram types cannot be represented here.
+            </p>
+            <textarea
+              autoFocus
+              value={mermaid.text}
+              placeholder={"flowchart TD\n  A[Start] --> B{Decision}\n  B -->|yes| C([Done])\n  B -->|no| D[(Store)]"}
+              onChange={(e) => setMermaid((m) => ({ ...m, text: e.target.value, errors: [] }))}
+            />
+            {mermaid.errors.length > 0 && (
+              <ul className="modal-errors">
+                {mermaid.errors.map((er, i) => <li key={i}>{er}</li>)}
+              </ul>
+            )}
+            {mermaid.warnings.length > 0 && (
+              <ul className="modal-warnings">
+                {mermaid.warnings.map((wr, i) => <li key={i}>{wr}</li>)}
+              </ul>
+            )}
+            <div className="modal-foot">
+              <span className="modal-hint">Replaces the current diagram &#8212; Ctrl+Z brings it back</span>
+              <button className="btn subtle" onClick={() => setMermaid(null)}>Cancel</button>
+              <button className="btn" onClick={loadMermaid} disabled={!mermaid.text.trim()}>
+                Load
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       {editing && (
         <Palette
           onAdd={(t) => doAddNode(t, centerPos())}
@@ -1149,8 +1204,12 @@ export default function App() {
       </div>
 
       <aside className="sidebar">
+        <div className="brand">
+          <span className="brand-name">FlowDesigner</span>
+          <span className="brand-fine">v1.2 &#183; Created by san</span>
+        </div>
+
         <div className="titleblock">
-          <div className="tb-row tb-title">{config.meta?.title || "Interface Diagram"}</div>
           <div className="tb-grid">
             <div className="tb-cell"><span>rev</span>{config.meta?.version || "—"}</div>
             <div className="tb-cell"><span>nodes</span>{counts.nodes}</div>
@@ -1267,6 +1326,13 @@ export default function App() {
           <button className="btn" onClick={exportConfig}>Export JSON</button>
           <button className="btn subtle" title="Save the diagram (with current highlight) as a PNG image" onClick={exportPng}>
             PNG
+          </button>
+          <button
+            className="btn subtle"
+            title="Convert a Mermaid flowchart into this diagram (replaces the canvas; Ctrl+Z restores)"
+            onClick={() => setMermaid({ text: "", errors: [], warnings: [] })}
+          >
+            Mermaid
           </button>
           <button className="btn subtle" title="Save the diagram (with current highlight) as a scalable SVG" onClick={exportSvgFile}>
             SVG
