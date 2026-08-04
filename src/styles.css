@@ -913,3 +913,18 @@ html, body, #root {
   color: var(--ink-soft);
   white-space: nowrap;
 }
+
+.foot-sec { width: 100%; }
+.foot-sec + .foot-sec { margin-top: 10px; }
+.foot-label {
+  display: block;
+  font-family: var(--mono);
+  font-size: 9.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--ink-soft);
+  margin-bottom: 5px;
+}
+.foot-btns { display: flex; flex-wrap: wrap; gap: 6px; }
+.foot-btns .btn { flex: 1 1 0; white-space: nowrap; }
+.foot-btns .btn.subtle { flex: 1 1 0; text-align: center; }

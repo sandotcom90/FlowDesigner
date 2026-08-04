@@ -1211,7 +1211,6 @@ export default function App() {
 
         <div className="titleblock">
           <div className="tb-grid">
-            <div className="tb-cell"><span>rev</span>{config.meta?.version || "—"}</div>
             <div className="tb-cell"><span>nodes</span>{counts.nodes}</div>
             <div className="tb-cell"><span>links</span>{counts.edges}</div>
           </div>
@@ -1322,28 +1321,38 @@ export default function App() {
         )}
 
         <div className="sidebar-foot">
-          <button className="btn" onClick={() => fileRef.current?.click()}>Load JSON</button>
-          <button className="btn" onClick={exportConfig}>Export JSON</button>
-          <button className="btn subtle" title="Save the diagram (with current highlight) as a PNG image" onClick={exportPng}>
-            PNG
-          </button>
-          <button
-            className="btn subtle"
-            title="Convert a Mermaid flowchart into this diagram (replaces the canvas; Ctrl+Z restores)"
-            onClick={() => setMermaid({ text: "", errors: [], warnings: [] })}
-          >
-            Mermaid
-          </button>
-          <button className="btn subtle" title="Save the diagram (with current highlight) as a scalable SVG" onClick={exportSvgFile}>
-            SVG
-          </button>
-          <button className="btn subtle" title="Save a script-free HTML page of the current view with hover tooltips — safe for Confluence/SharePoint" onClick={exportHtml}>
-            HTML
-          </button>
-          <button className="btn subtle" title="Download the JSON Schema"
-            onClick={() => download("diagram.schema.json", JSON.stringify(schema, null, 2))}>
-            Schema
-          </button>
+          <div className="foot-sec">
+            <span className="foot-label">Load</span>
+            <div className="foot-btns">
+              <button className="btn" onClick={() => fileRef.current?.click()}>Load JSON</button>
+              <button
+                className="btn"
+                title="Convert a Mermaid flowchart into this diagram (replaces the canvas; Ctrl+Z restores)"
+                onClick={() => setMermaid({ text: "", errors: [], warnings: [] })}
+              >
+                Load Mermaid
+              </button>
+            </div>
+          </div>
+          <div className="foot-sec">
+            <span className="foot-label">Export</span>
+            <div className="foot-btns">
+              <button className="btn subtle" onClick={exportConfig}>JSON</button>
+              <button className="btn subtle" title="Save the diagram (with current highlight) as a PNG image" onClick={exportPng}>
+                PNG
+              </button>
+              <button className="btn subtle" title="Save the diagram (with current highlight) as a scalable SVG" onClick={exportSvgFile}>
+                SVG
+              </button>
+              <button className="btn subtle" title="Save a script-free HTML page of the current view with clickable group highlights \u2014 safe for Confluence/SharePoint" onClick={exportHtml}>
+                HTML
+              </button>
+              <button className="btn subtle" title="Download the JSON Schema"
+                onClick={() => download("diagram.schema.json", JSON.stringify(schema, null, 2))}>
+                Schema
+              </button>
+            </div>
+          </div>
           {dirty && (
             <button className="btn subtle" title="Discard changes since last load/export" onClick={revert}>
               Revert
