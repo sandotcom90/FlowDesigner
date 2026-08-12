@@ -1,0 +1,739 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Measuring Business Benefit from AI Tools — Strategy Note</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;450;500;600&family=IBM+Plex+Serif:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#14212e;
+    --ink-soft:#3c4c5a;
+    --ink-faint:#7b8a95;
+    --rule:#d7dcd8;
+    --rule-strong:#b6bfba;
+    --paper:#f5f6f4;
+    --paper-raised:#fbfcfa;
+    --verified:#17635a;
+    --gate:#9a7b2e;
+    --stop:#a4483a;
+    --measure:640px;
+    --gutter:132px;
+  }
+
+  *{box-sizing:border-box;}
+
+  html{-webkit-text-size-adjust:100%;}
+
+  body{
+    margin:0;
+    background:var(--paper);
+    color:var(--ink);
+    font-family:"IBM Plex Sans",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+    font-size:16.5px;
+    line-height:1.62;
+    font-weight:400;
+    -webkit-font-smoothing:antialiased;
+  }
+
+  .sheet{
+    max-width:calc(var(--measure) + var(--gutter) + 96px);
+    margin:0 auto;
+    padding:0 48px 120px;
+  }
+
+  .col{
+    max-width:var(--measure);
+    margin-left:var(--gutter);
+  }
+
+  /* ---------- masthead ---------- */
+
+  .masthead{
+    padding:72px 0 40px;
+    border-bottom:1.5px solid var(--ink);
+    margin-bottom:0;
+  }
+
+  .stamp{
+    font-family:"IBM Plex Mono",monospace;
+    font-size:10.5px;
+    letter-spacing:.16em;
+    text-transform:uppercase;
+    color:var(--ink-faint);
+    display:flex;
+    flex-wrap:wrap;
+    gap:22px;
+    margin-bottom:44px;
+  }
+  .stamp span{white-space:nowrap;}
+  .stamp .live{color:var(--verified);}
+
+  h1{
+    font-family:"IBM Plex Serif",Georgia,serif;
+    font-weight:500;
+    font-size:clamp(34px,5.4vw,50px);
+    line-height:1.08;
+    letter-spacing:-.018em;
+    margin:0 0 20px;
+    max-width:15ch;
+  }
+
+  .standfirst{
+    font-family:"IBM Plex Serif",Georgia,serif;
+    font-size:19px;
+    line-height:1.5;
+    color:var(--ink-soft);
+    max-width:52ch;
+    margin:0;
+  }
+
+  /* ---------- thesis ---------- */
+
+  .thesis{
+    padding:38px 0 30px;
+    border-bottom:1px solid var(--rule);
+  }
+  .thesis .chain{
+    font-family:"IBM Plex Mono",monospace;
+    font-size:15px;
+    font-weight:500;
+    letter-spacing:.02em;
+    display:flex;
+    flex-wrap:wrap;
+    align-items:center;
+    gap:12px;
+    margin:0 0 16px;
+  }
+  .thesis .chain b{font-weight:600;}
+  .thesis .chain i{
+    font-style:normal;
+    color:var(--stop);
+    font-size:17px;
+  }
+  .thesis p{margin:0;color:var(--ink-soft);max-width:56ch;}
+
+  /* ---------- contents ---------- */
+
+  .contents{
+    padding:34px 0;
+    border-bottom:1px solid var(--rule);
+  }
+  .contents h2{
+    font-family:"IBM Plex Mono",monospace;
+    font-size:10.5px;
+    letter-spacing:.16em;
+    text-transform:uppercase;
+    color:var(--ink-faint);
+    font-weight:500;
+    margin:0 0 18px;
+  }
+  .contents ol{
+    list-style:none;
+    margin:0;
+    padding:0;
+    counter-reset:toc;
+    columns:2;
+    column-gap:40px;
+  }
+  .contents li{
+    counter-increment:toc;
+    break-inside:avoid;
+    margin-bottom:9px;
+  }
+  .contents a{
+    color:var(--ink);
+    text-decoration:none;
+    display:flex;
+    gap:12px;
+    align-items:baseline;
+    border-bottom:1px solid transparent;
+    padding-bottom:1px;
+  }
+  .contents a::before{
+    content:counter(toc,decimal-leading-zero);
+    font-family:"IBM Plex Mono",monospace;
+    font-size:11px;
+    color:var(--gate);
+    flex:none;
+  }
+  .contents a:hover{border-bottom-color:var(--ink);}
+
+  /* ---------- sections ---------- */
+
+  .block{
+    padding:52px 0;
+    border-bottom:1px solid var(--rule);
+    position:relative;
+  }
+
+  .marker{
+    position:absolute;
+    left:0;
+    top:56px;
+    width:104px;
+    font-family:"IBM Plex Mono",monospace;
+    font-size:10.5px;
+    letter-spacing:.13em;
+    text-transform:uppercase;
+    color:var(--ink-faint);
+    line-height:1.5;
+  }
+  .marker .num{
+    display:block;
+    font-size:22px;
+    letter-spacing:0;
+    color:var(--gate);
+    margin-bottom:6px;
+  }
+
+  h2.head{
+    font-family:"IBM Plex Serif",Georgia,serif;
+    font-weight:500;
+    font-size:27px;
+    line-height:1.22;
+    letter-spacing:-.012em;
+    margin:0 0 18px;
+    max-width:26ch;
+  }
+
+  h3{
+    font-family:"IBM Plex Sans",sans-serif;
+    font-size:14px;
+    font-weight:600;
+    letter-spacing:.005em;
+    margin:30px 0 10px;
+  }
+
+  p{margin:0 0 15px;}
+  p:last-child{margin-bottom:0;}
+
+  strong{font-weight:600;}
+  em{font-style:italic;}
+
+  ul.plain{
+    list-style:none;
+    margin:0 0 18px;
+    padding:0;
+  }
+  ul.plain li{
+    padding-left:20px;
+    position:relative;
+    margin-bottom:9px;
+  }
+  ul.plain li::before{
+    content:"";
+    position:absolute;
+    left:2px;
+    top:.72em;
+    width:7px;
+    height:1.5px;
+    background:var(--rule-strong);
+  }
+
+  ol.steps{
+    margin:0 0 18px;
+    padding-left:22px;
+  }
+  ol.steps li{margin-bottom:9px;}
+
+  .lead-in{
+    font-family:"IBM Plex Mono",monospace;
+    font-size:11px;
+    letter-spacing:.13em;
+    text-transform:uppercase;
+    color:var(--verified);
+    margin:0 0 12px;
+  }
+
+  /* ---------- signature: the gate rail ---------- */
+
+  .rail{
+    margin:8px 0 26px;
+    padding:26px 28px 22px;
+    background:var(--paper-raised);
+    border:1px solid var(--rule);
+  }
+  .rail-title{
+    font-family:"IBM Plex Mono",monospace;
+    font-size:10.5px;
+    letter-spacing:.14em;
+    text-transform:uppercase;
+    color:var(--ink-faint);
+    margin:0 0 20px;
+  }
+  .stages{
+    display:flex;
+    align-items:flex-end;
+    gap:5px;
+  }
+  .stage{flex:1;min-width:0;}
+  .stage .bar{
+    height:14px;
+    background:var(--rule-strong);
+    margin-bottom:9px;
+  }
+  .stage:nth-child(1) .bar{height:38px;}
+  .stage:nth-child(2) .bar{height:29px;}
+  .stage:nth-child(3) .bar{height:20px;}
+  .stage:nth-child(4) .bar{height:14px;background:var(--verified);}
+  .stage:nth-child(5) .bar{height:10px;background:var(--verified);}
+  .stage .label{
+    font-family:"IBM Plex Mono",monospace;
+    font-size:10px;
+    letter-spacing:.05em;
+    text-transform:uppercase;
+    line-height:1.35;
+    color:var(--ink-soft);
+  }
+  .stage.counts .label{color:var(--verified);font-weight:500;}
+  .rail-foot{
+    display:flex;
+    gap:26px;
+    flex-wrap:wrap;
+    margin-top:20px;
+    padding-top:16px;
+    border-top:1px solid var(--rule);
+    font-family:"IBM Plex Mono",monospace;
+    font-size:10.5px;
+    letter-spacing:.04em;
+    color:var(--ink-faint);
+  }
+  .rail-foot b{font-weight:500;}
+  .key{display:inline-flex;align-items:center;gap:7px;}
+  .key::before{content:"";width:9px;height:9px;flex:none;}
+  .key.stops::before{background:var(--rule-strong);}
+  .key.counts::before{background:var(--verified);}
+
+  /* ---------- tables ---------- */
+
+  .table-wrap{margin:6px 0 20px;overflow-x:auto;}
+  table{
+    width:100%;
+    border-collapse:collapse;
+    font-size:14.5px;
+  }
+  th{
+    text-align:left;
+    font-family:"IBM Plex Mono",monospace;
+    font-size:10px;
+    letter-spacing:.13em;
+    text-transform:uppercase;
+    font-weight:500;
+    color:var(--ink-faint);
+    padding:0 16px 9px 0;
+    border-bottom:1px solid var(--ink);
+    vertical-align:bottom;
+  }
+  td{
+    padding:11px 16px 11px 0;
+    border-bottom:1px solid var(--rule);
+    vertical-align:top;
+    color:var(--ink-soft);
+  }
+  td:first-child{
+    color:var(--ink);
+    font-family:"IBM Plex Mono",monospace;
+    font-size:13px;
+    white-space:nowrap;
+  }
+  td.pri{font-weight:500;}
+
+  /* ---------- pull quote ---------- */
+
+  .pull{
+    margin:26px 0;
+    padding:20px 0 20px 24px;
+    border-left:2px solid var(--gate);
+    font-family:"IBM Plex Serif",Georgia,serif;
+    font-size:19px;
+    line-height:1.45;
+    color:var(--ink);
+  }
+  .pull p{margin:0;}
+
+  /* ---------- test cards ---------- */
+
+  .tests{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:2px;
+    background:var(--rule);
+    border:1px solid var(--rule);
+    margin:8px 0 4px;
+  }
+  .test{
+    background:var(--paper-raised);
+    padding:22px 22px 24px;
+  }
+  .test h4{
+    font-family:"IBM Plex Mono",monospace;
+    font-size:11px;
+    letter-spacing:.12em;
+    text-transform:uppercase;
+    color:var(--gate);
+    margin:0 0 12px;
+    font-weight:500;
+  }
+  .test p{font-size:14.5px;line-height:1.55;color:var(--ink-soft);}
+  .test p:first-of-type{color:var(--ink);}
+
+  /* ---------- closing ---------- */
+
+  .closing{
+    margin-top:52px;
+    padding:40px 42px 44px;
+    background:var(--ink);
+    color:var(--paper);
+  }
+  .closing .lead-in{color:#8fc3ba;}
+  .closing h2{
+    font-family:"IBM Plex Serif",Georgia,serif;
+    font-weight:500;
+    font-size:25px;
+    line-height:1.25;
+    margin:0 0 18px;
+    max-width:24ch;
+  }
+  .closing p{color:#c3ccd2;max-width:56ch;}
+  .closing ol{
+    margin:20px 0 22px;
+    padding:0;
+    list-style:none;
+    counter-reset:c;
+  }
+  .closing ol li{
+    counter-increment:c;
+    padding-left:38px;
+    position:relative;
+    margin-bottom:12px;
+    color:var(--paper);
+  }
+  .closing ol li::before{
+    content:counter(c,decimal-leading-zero);
+    position:absolute;
+    left:0;
+    top:1px;
+    font-family:"IBM Plex Mono",monospace;
+    font-size:11px;
+    color:#8fc3ba;
+  }
+
+  footer{
+    margin-top:44px;
+    font-family:"IBM Plex Mono",monospace;
+    font-size:10.5px;
+    letter-spacing:.1em;
+    text-transform:uppercase;
+    color:var(--ink-faint);
+  }
+
+  a.anchor{color:inherit;text-decoration:none;}
+
+  /* ---------- responsive ---------- */
+
+  @media (max-width:900px){
+    :root{--gutter:0px;}
+    .sheet{padding:0 26px 80px;}
+    .marker{
+      position:static;
+      width:auto;
+      display:flex;
+      align-items:baseline;
+      gap:10px;
+      margin-bottom:14px;
+    }
+    .marker .num{display:inline;font-size:13px;margin:0;}
+    .contents ol{columns:1;}
+    .tests{grid-template-columns:1fr;}
+    .stages{
+      display:block;
+    }
+    .stage{display:flex;align-items:center;gap:12px;margin-bottom:10px;}
+    .stage .bar{
+      height:12px !important;
+      margin-bottom:0;
+      flex:none;
+    }
+    .stage:nth-child(1) .bar{width:100%;max-width:150px;}
+    .stage:nth-child(2) .bar{width:76%;max-width:114px;}
+    .stage:nth-child(3) .bar{width:52%;max-width:78px;}
+    .stage:nth-child(4) .bar{width:34%;max-width:51px;}
+    .stage:nth-child(5) .bar{width:22%;max-width:33px;}
+    .closing{padding:30px 26px 34px;}
+  }
+
+  @media (max-width:560px){
+    body{font-size:16px;}
+    .sheet{padding:0 20px 64px;}
+    h1{font-size:31px;}
+    .standfirst{font-size:17px;}
+    h2.head{font-size:23px;}
+    .thesis .chain{font-size:13px;gap:8px;}
+  }
+
+  @media print{
+    body{background:#fff;font-size:10.5pt;}
+    .sheet{max-width:none;padding:0;}
+    .col{margin-left:0;max-width:none;}
+    .block{break-inside:avoid;padding:22pt 0;}
+    .marker{position:static;width:auto;margin-bottom:8pt;}
+    .marker .num{display:inline;font-size:10pt;}
+    .closing{background:#fff;color:var(--ink);border:1.5pt solid var(--ink);}
+    .closing p,.closing ol li{color:var(--ink);}
+    .closing .lead-in,.closing ol li::before{color:var(--gate);}
+    .contents{display:none;}
+  }
+</style>
+</head>
+<body>
+<div class="sheet">
+
+  <header class="masthead col">
+    <div class="stamp">
+      <span>Strategy note</span>
+      <span>AI benefit measurement</span>
+      <span>Discussion draft</span>
+      <span class="live">For management review</span>
+    </div>
+    <h1>Measuring what AI tools actually gave the business</h1>
+    <p class="standfirst">Tool adoption is already tracked and tells us little. This note sets out how to measure realised benefit at the user and business level, and how to keep experiments out of the numbers.</p>
+  </header>
+
+  <section class="thesis col">
+    <p class="chain"><b>Activity</b> <i>&ne;</i> <b>Output</b> <i>&ne;</i> <b>Benefit</b></p>
+    <p>A proof-of-concept pull request is activity. A merged pull request is output. Neither is a benefit until something changed for the business. Every method below exists to hold that distinction.</p>
+  </section>
+
+  <nav class="contents col">
+    <h2>Contents</h2>
+    <ol>
+      <li><a href="#s1">Put a value gate in front of everything</a></li>
+      <li><a href="#s2">Instrument the work item, not the tool</a></li>
+      <li><a href="#s3">Build a task archetype catalogue</a></li>
+      <li><a href="#s4">Estimate-vs-actual drift</a></li>
+      <li><a href="#s5">Measure the business process</a></li>
+      <li><a href="#s6">Ask users the right question</a></li>
+      <li><a href="#s7">Benefits that aren't time savings</a></li>
+      <li><a href="#s8">Attribution discipline</a></li>
+    </ol>
+  </nav>
+
+  <!-- 01 -->
+  <section class="block" id="s1">
+    <div class="marker"><span class="num">01</span>Filtering</div>
+    <div class="col">
+      <h2 class="head"><a class="anchor" href="#s1">Put a value gate in front of everything</a></h2>
+      <p>Nothing counts as a benefit until it passes a gate. Define the stages, and only measure benefit past the last one.</p>
+
+      <div class="rail">
+        <p class="rail-title">Value gate — where a piece of AI work stops</p>
+        <div class="stages">
+          <div class="stage"><div class="bar"></div><div class="label">Attempted</div></div>
+          <div class="stage"><div class="bar"></div><div class="label">Produced</div></div>
+          <div class="stage"><div class="bar"></div><div class="label">Accepted</div></div>
+          <div class="stage counts"><div class="bar"></div><div class="label">In production</div></div>
+          <div class="stage counts"><div class="bar"></div><div class="label">Business&#8209;affecting</div></div>
+        </div>
+        <div class="rail-foot">
+          <span class="key stops"><b>Does not enter the benefit calculation</b></span>
+          <span class="key counts"><b>Counts as benefit</b></span>
+        </div>
+      </div>
+
+      <p>A proof-of-concept pull request stops at <em>Produced</em>. It enters neither the numerator nor the denominator of the benefit calculation. This one rule removes most of the noise in the current portfolio, and it holds up when challenged.</p>
+
+      <h3>Two consequences worth designing for</h3>
+      <ul class="plain">
+        <li><strong>Measure experiments separately, on different metrics.</strong> Proofs of concept aren't waste — they buy options. Judge that portfolio on conversion rate to production and cost per experiment, not on savings. That supports an honest and quite strong statement: we spent £X on 200 experiments, 12 converted, and those 12 produced £Y.</li>
+        <li><strong>Track the failure cost.</strong> Effort spent on AI attempts that were discarded is a real cost and belongs in the denominator. Leaving it out inflates the return by ignoring the misses.</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- 02 -->
+  <section class="block" id="s2">
+    <div class="marker"><span class="num">02</span>Capture</div>
+    <div class="col">
+      <h2 class="head"><a class="anchor" href="#s2">Instrument the work item, not the tool</a></h2>
+      <p>Add a small set of fields to the systems where work is already tracked — Jira, ServiceNow, the change and release system.</p>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>Field</th><th>Captures</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>ai_assisted</td><td>Yes / no.</td></tr>
+            <tr><td>ai_tool</td><td>Which tool was used.</td></tr>
+            <tr><td>ai_role</td><td>Drafted, accelerated, reviewed, or fully autonomous. This matters a great deal — drafted then heavily rewritten is a different benefit from merged as-is.</td></tr>
+            <tr><td>effort_actual</td><td>Person-hours at closure.</td></tr>
+            <tr><td class="pri">effort_counterfactual</td><td class="pri">How long this would have taken without the tool.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p>The last field is the crux. It is self-reported, but asked at the moment of completion about a <em>specific</em> item it is far more reliable than a quarterly "how much time did AI save you." The result is paired data — actual against counterfactual, per work item and per task type — so the output is a distribution rather than a single hopeful number.</p>
+      <p>Make it two clicks, not a form. If closing a ticket takes an extra 90 seconds, compliance dies.</p>
+    </div>
+  </section>
+
+  <!-- 03 -->
+  <section class="block" id="s3">
+    <div class="marker"><span class="num">03</span>Baseline</div>
+    <div class="col">
+      <h2 class="head"><a class="anchor" href="#s3">Build a task archetype catalogue</a></h2>
+      <p>The most credible number available is per task type, not per tool. Identify the 10&ndash;20 recurring archetypes in the estate, for example:</p>
+      <ul class="plain">
+        <li>Write unit tests for an existing module</li>
+        <li>Convert a stored procedure to Spark or PySpark</li>
+        <li>Produce an interface specification document</li>
+        <li>Triage a production incident to root cause</li>
+        <li>Build a regulatory report extract</li>
+        <li>Update dependencies and fix the breakages</li>
+        <li>Summarise a 60-page requirements document</li>
+      </ul>
+      <p>For each, establish a baseline effort from historical tickets or a small timed sample, then measure the same archetype with AI assistance. That yields a <strong>per-archetype multiplier</strong>: test authoring runs 2.1&times; faster, stored procedure conversion 1.3&times;, incident triage no measurable change.</p>
+
+      <h3>Why this holds up</h3>
+      <ul class="plain">
+        <li>It survives scrutiny far better than a blended average.</li>
+        <li>It shows management <em>where</em> to push adoption next.</li>
+        <li>It extrapolates: archetype volume &times; multiplier &times; rate = benefit, computed from work volumes already on hand.</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- 04 -->
+  <section class="block" id="s4">
+    <div class="marker"><span class="num">04</span>Passive signal</div>
+    <div class="col">
+      <h2 class="head"><a class="anchor" href="#s4">Estimate-vs-actual drift</a></h2>
+      <p>Historical estimates already sit in Jira. Compare the ratio of estimated to actual effort for AI-assisted against non-assisted work of the same type and size. Estimates were set by people using pre-AI intuition, so a systematic overshoot on AI-assisted items is a genuine signal — and it costs nothing to collect, because the data already exists.</p>
+      <p>Watch the obvious confound: once people know the tools are available, they start estimating lower and the signal decays. This works best in the first few months after a rollout.</p>
+    </div>
+  </section>
+
+  <!-- 05 -->
+  <section class="block" id="s5">
+    <div class="marker"><span class="num">05</span>Business level</div>
+    <div class="col">
+      <h2 class="head"><a class="anchor" href="#s5">Measure the business process, not the IT activity</a></h2>
+      <p>For anything user-facing, the benefit shows up in a process metric owned by a business person, not by the delivery team.</p>
+      <ul class="plain">
+        <li>Cases or transactions closed per FTE per period</li>
+        <li>Average handling time and touch time per case</li>
+        <li>End-to-end cycle time from request to fulfilment</li>
+        <li>Rework rate, error rate, first-time-right percentage</li>
+        <li>Backlog age and its distribution</li>
+        <li>Deflection — queries resolved without a human touch, and satisfaction on those</li>
+        <li>Unit cost — per report produced, per case handled, per release shipped</li>
+      </ul>
+
+      <div class="pull">
+        <p>"Cost per regulatory report fell from $4,100 to $2,800" is a far more powerful sentence than "we saved 3,000 hours."</p>
+      </div>
+
+      <h3>Handling attribution</h3>
+      <ul class="plain">
+        <li><strong>Intervention log.</strong> Keep a dated record of everything that changed for that process — AI tooling, headcount, process redesign, system upgrades, volume shifts. When a metric moves, the candidate causes can at least be enumerated rather than guessed at.</li>
+        <li><strong>Staggered enablement.</strong> Turn the tool on for one team, region, or product line before another and compare during the gap. It is the only inexpensive route to near-causal evidence, and it usually costs nothing because rollouts are staged anyway.</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- 06 -->
+  <section class="block" id="s6">
+    <div class="marker"><span class="num">06</span>User level</div>
+    <div class="col">
+      <h2 class="head"><a class="anchor" href="#s6">Ask users the right question, at the right moment</a></h2>
+      <p>Replace periodic recall surveys with experience sampling: a single question at task closure, or on a randomly sampled 5% of completed items.</p>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>Ask</th><th>Why it works</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Duration</td><td>"How long did this take you?" — compared against the archetype baseline. No AI framing at all, so no priming bias.</td></tr>
+            <tr><td>Counterfactual</td><td>"Without the tool this would have taken: same / 25% longer / 50% longer / 2&times; / I wouldn't have attempted it."</td></tr>
+            <tr><td class="pri">Disposition</td><td class="pri">"What did you do with the time freed?" — took on additional work / reduced overtime / deeper quality work / no change.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p>That last question is what converts hours into a claim finance will recognise, and it is the one almost nobody asks.</p>
+      <p>Alongside it, run a small number of <strong>timed paired trials</strong> — 15 to 20 people, one realistic task from the archetype catalogue, half with the tool. A single well-run trial produces a hard multiplier that anchors all the self-reported data around it. It takes a few days and is disproportionately valuable the moment someone challenges the numbers.</p>
+    </div>
+  </section>
+
+  <!-- 07 -->
+  <section class="block" id="s7">
+    <div class="marker"><span class="num">07</span>Undercount risk</div>
+    <div class="col">
+      <h2 class="head"><a class="anchor" href="#s7">Capture the benefits that aren't time savings</a></h2>
+      <p>Some of the real value never appears in an hours-saved column. Ignoring these undercounts badly.</p>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>Benefit</th><th>How to measure it</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>New work</td><td>Analysis, test coverage, documentation and refactoring that was previously never prioritised. Count the volume of newly attempted work and describe its value, rather than forcing it into a time saving.</td></tr>
+            <tr><td>Quality</td><td>Defect escape rate, incidents, audit findings, rework percentage — converted using existing cost-per-defect or cost-per-incident figures where they exist.</td></tr>
+            <tr><td>Speed to market</td><td>Days earlier a capability landed &times; the daily value of that capability. Only usable where the business will state the daily value.</td></tr>
+            <tr><td>Key-person risk</td><td>Time for a new joiner to first productive commit; dependency on single experts for legacy platforms. Very real where PeopleSoft and Essbase-era systems are still load-bearing.</td></tr>
+            <tr><td class="pri">Absorbed growth</td><td class="pri">Volume grew X% while headcount stayed flat — often the cleanest cost-avoidance story available.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- 08 -->
+  <section class="block" id="s8">
+    <div class="marker"><span class="num">08</span>Discipline</div>
+    <div class="col">
+      <h2 class="head"><a class="anchor" href="#s8">Attribution discipline</a></h2>
+      <p>Two tests to apply before any claim enters the benefits register.</p>
+
+      <div class="tests">
+        <div class="test">
+          <h4>The counterfactual test</h4>
+          <p>Would this have been done anyway, by other means, and at what cost?</p>
+          <p>If the answer is "yes, manually, in three days," the benefit is three days minus the AI effort. If the answer is "it would not have been done," the benefit is the value of a new capability, not a time saving. Different category — don't mix them.</p>
+        </div>
+        <div class="test">
+          <h4>The displacement test</h4>
+          <p>Did the effort actually leave, or did it move?</p>
+          <p>Reviewing AI output, verifying summaries, correcting invented logic and clearing abandoned branches are all real hours. Net benefit = gross time saved &minus; verification &minus; rework &minus; discarded attempts. Ask for the net.</p>
+        </div>
+      </div>
+
+      <p style="margin-top:22px;">Being visibly the person who insists on the net figure is what makes every other number in the pack believable.</p>
+    </div>
+  </section>
+
+  <section class="col">
+    <div class="closing">
+      <p class="lead-in">Recommendation</p>
+      <h2>The shortest defensible path to a real number</h2>
+      <p>The full framework doesn't need to land at once. Four moves produce an auditable figure within a quarter, and the method scales to the rest of the portfolio without being rebuilt.</p>
+      <ol>
+        <li>Pick three high-volume task archetypes and establish their baselines properly.</li>
+        <li>Run one timed paired trial on each.</li>
+        <li>Add the two closure fields to Jira — for those work types only.</li>
+        <li>Put the value gate in front of everything.</li>
+      </ol>
+      <p>That is enough to answer the question management is actually asking, with evidence that survives being challenged.</p>
+    </div>
+
+    <footer>Strategy note &middot; AI benefit measurement &middot; Discussion draft</footer>
+  </section>
+
+</div>
+</body>
+</html>
