@@ -11,6 +11,14 @@ import { validateConfig } from "./validate";
 import { buildDiagramSvg, buildStaticHtml } from "./exportSvg";
 import { mermaidToConfig } from "./mermaid";
 import sampleConfig from "./sample-config.json";
+
+const BLANK_CONFIG = {
+  meta: { title: "Untitled Diagram", version: "1.0" },
+  groups: [],
+  nodes: [],
+  edges: [],
+  processes: []
+};
 import schema from "./schema.json";
 import Palette from "./editor/Palette";
 import PropertiesPanel from "./editor/PropertiesPanel";
@@ -291,8 +299,8 @@ async function download(filename, data, mime = "application/json") {
 }
 
 export default function App() {
-  const [config, _setConfig] = useState(sampleConfig);
-  const [baseline, setBaseline] = useState(sampleConfig);
+  const [config, _setConfig] = useState(BLANK_CONFIG);
+  const [baseline, setBaseline] = useState(BLANK_CONFIG);
   const undoRef = useRef([]);
   const redoRef = useRef([]);
   const [histVer, setHistVer] = useState(0);
@@ -359,7 +367,7 @@ export default function App() {
   }, [mermaid, setConfig]);
   const [underlay, setUnderlay] = useState(null);
   const [errors, setErrors] = useState([]);
-  const [loadedName, setLoadedName] = useState("sample (embedded)");
+  const [loadedName, setLoadedName] = useState("untitled");
   const [tip, setTip] = useState(null);
   const [nodes, setNodes] = useState([]);
   const [edges, setEdges] = useState([]);
@@ -919,18 +927,6 @@ export default function App() {
     img.src = url;
   };
 
-  const revert = () => {
-    if (window.confirm("Discard all changes since the last load/export?")) {
-      _setConfig(baseline);
-      undoRef.current = [];
-      redoRef.current = [];
-      setHistVer((v) => v + 1);
-      setSelection(null);
-      setBuilder(null);
-      setSelectedProc(null);
-    }
-  };
-
   const dirty = config !== baseline;
 
   const activeProc = useMemo(
@@ -1324,13 +1320,13 @@ export default function App() {
           <div className="foot-sec">
             <span className="foot-label">Load</span>
             <div className="foot-btns">
-              <button className="btn" onClick={() => fileRef.current?.click()}>Load JSON</button>
+              <button className="btn" onClick={() => fileRef.current?.click()}>JSON</button>
               <button
                 className="btn"
                 title="Convert a Mermaid flowchart into this diagram (replaces the canvas; Ctrl+Z restores)"
                 onClick={() => setMermaid({ text: "", errors: [], warnings: [] })}
               >
-                Load Mermaid
+                Mermaid
               </button>
             </div>
           </div>
@@ -1353,11 +1349,6 @@ export default function App() {
               </button>
             </div>
           </div>
-          {dirty && (
-            <button className="btn subtle" title="Discard changes since last load/export" onClick={revert}>
-              Revert
-            </button>
-          )}
           <input
             ref={fileRef}
             type="file"

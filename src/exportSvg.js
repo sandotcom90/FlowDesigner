@@ -254,6 +254,7 @@ export function buildDiagramSvg(cfg, proc, opts = {}) {
     (g.points || []).forEach((p) => grow(g.position.x + p.x, g.position.y + p.y));
   });
   cfg.edges.forEach((e) => (e.waypoints || []).forEach((p) => grow(p.x, p.y)));
+  if (!isFinite(minX)) { minX = 0; minY = 0; maxX = 760; maxY = 420; } /* empty diagram */
   const PAD = 50;
   minX -= PAD; minY -= PAD; maxX += PAD; maxY += PAD;
   const width = Math.ceil(maxX - minX);
