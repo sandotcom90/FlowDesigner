@@ -145,6 +145,42 @@ export default function PropertiesPanel({ cfg, selection, onRename, onPatch, onD
               ))}
             </select>
           </Field>
+          <Field label="background colour">
+            <div className="pp-color">
+              <input
+                type="color"
+                value={el.color || "#ffffff"}
+                onChange={(e) =>
+                  onPatch({ color: e.target.value === "#ffffff" ? undefined : e.target.value })
+                }
+                title="Pick a background colour for this component"
+              />
+              <span className="pp-color-val">{el.color || "default"}</span>
+              {el.color && (
+                <button className="pp-mini" onClick={() => onPatch({ color: undefined })}>
+                  reset
+                </button>
+              )}
+            </div>
+          </Field>
+          <Field label="font colour">
+            <div className="pp-color">
+              <input
+                type="color"
+                value={el.fontColor || "#22272e"}
+                onChange={(e) =>
+                  onPatch({ fontColor: e.target.value === "#22272e" ? undefined : e.target.value })
+                }
+                title="Pick a colour for this component's label"
+              />
+              <span className="pp-color-val">{el.fontColor || "default"}</span>
+              {el.fontColor && (
+                <button className="pp-mini" onClick={() => onPatch({ fontColor: undefined })}>
+                  reset
+                </button>
+              )}
+            </div>
+          </Field>
           <Field label="connect points per side">
             <div className="pp-step">
               <button

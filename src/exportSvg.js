@@ -384,8 +384,12 @@ ${(() => {
       lit ? ' filter="url(#litshadow)"' : ""
     }>
 <title>${esc(tt)}</title>
-${shapeMarkup(n.type, w, h)}
-<text x="${w / 2 + dx}" y="${h / 2 + dy}" class="nlabel" text-anchor="middle" dominant-baseline="central"${n.fontSize ? ` style="font-size:${n.fontSize * FS}px"` : ""}>${tspans(
+${n.color ? shapeMarkup(n.type, w, h).replace(/class="shape( dashed)?"/g, `class="shape$1" fill="${n.color}"`) : shapeMarkup(n.type, w, h)}
+<text x="${w / 2 + dx}" y="${h / 2 + dy}" class="nlabel" text-anchor="middle" dominant-baseline="central"${
+      n.fontSize || n.fontColor
+        ? ` style="${n.fontSize ? `font-size:${n.fontSize * FS}px;` : ""}${n.fontColor ? `fill:${n.fontColor}` : ""}"`
+        : ""
+    }>${tspans(
       wrapLines((n.fontSize || NODE_FS) * FS, n.label, w - 18 - Math.abs(dx) * 2),
       w / 2 + dx,
       (n.fontSize || NODE_FS) * FS

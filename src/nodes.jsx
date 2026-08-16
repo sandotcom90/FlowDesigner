@@ -179,7 +179,10 @@ export function ShapeNode({ data, selected, width, height }) {
   const paint = shapes[data.shape] || shapes.service;
   const labelPad = data.shape === "ui" ? 17 : data.shape === "database" ? 14 : 0;
   return (
-    <div className="shape-node" style={{ width: w, height: h }}>
+    <div
+      className="shape-node"
+      style={{ width: w, height: h, ...(data.color ? { "--fill": data.color } : {}) }}
+    >
       <NodeResizer
         isVisible={!!(data.editable && selected)}
         minWidth={70}
@@ -194,7 +197,8 @@ export function ShapeNode({ data, selected, width, height }) {
         style={{
           paddingTop: labelPad,
           paddingLeft: data.shape === "auth" ? 22 : data.shape === "user" ? 26 : 0,
-          fontSize: data.fontSize
+          fontSize: data.fontSize,
+          ...(data.fontColor ? { color: data.fontColor } : {})
         }}
       >
         {data.label}

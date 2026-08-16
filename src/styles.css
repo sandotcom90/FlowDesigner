@@ -38,12 +38,12 @@ html, body, #root {
 .shape-node svg { display: block; overflow: visible; }
 
 .shape {
-  fill: #ffffff;
+  fill: var(--fill, #ffffff);
   stroke: var(--line);
   stroke-width: 1.5;
   transition: stroke 0.25s, filter 0.25s, fill 0.25s;
 }
-.shape.dashed { stroke-dasharray: 6 4; fill: #fdfdfb; }
+.shape.dashed { stroke-dasharray: 6 4; fill: var(--fill, #fdfdfb); }
 .stroke { stroke: var(--line); stroke-width: 1.5; fill: none; }
 .dot { fill: var(--line); }
 .glyph { fill: none; stroke: var(--line); stroke-width: 1.5; }
@@ -134,8 +134,19 @@ html, body, #root {
   background: var(--panel);
   display: flex;
   flex-direction: column;
-  overflow-y: auto;
+  min-height: 0;
+  overflow: hidden; /* header, mode toggle and footer stay pinned */
 }
+
+.sidebar-mid {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.sidebar-foot { flex: 0 0 auto; border-top: 1.5px solid var(--line); }
 
 .titleblock {
   border-bottom: 1.5px solid var(--line);
@@ -928,3 +939,11 @@ html, body, #root {
 .foot-btns { display: flex; flex-wrap: wrap; gap: 6px; }
 .foot-btns .btn { flex: 1 1 0; white-space: nowrap; }
 .foot-btns .btn.subtle { flex: 1 1 0; text-align: center; }
+
+.pp-color { display: flex; align-items: center; gap: 8px; }
+.pp-color input[type="color"] {
+  width: 42px; height: 28px; padding: 2px;
+  border: 1.5px solid var(--rule); border-radius: 6px;
+  background: #fff; cursor: pointer;
+}
+.pp-color-val { flex: 1; font-family: var(--mono); font-size: 11px; color: var(--ink-soft); }

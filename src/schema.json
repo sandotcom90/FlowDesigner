@@ -106,6 +106,16 @@
           },
           "size": { "$ref": "#/definitions/size" },
           "fontSize": { "type": "number", "minimum": 6, "maximum": 48 },
+          "color": {
+            "type": "string",
+            "pattern": "^#[0-9a-fA-F]{6}$",
+            "description": "Optional background fill for the component (hex, e.g. #ffe8c2). Omit for the default white."
+          },
+          "fontColor": {
+            "type": "string",
+            "pattern": "^#[0-9a-fA-F]{6}$",
+            "description": "Optional label colour for the component (hex). Omit for the default ink."
+          },
           "ports": {
             "type": "integer",
             "minimum": 1,
