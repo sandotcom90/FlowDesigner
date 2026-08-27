@@ -681,3 +681,112 @@ export function wrapSelection(cfg, nodeIds, pad = 28) {
   nodes.forEach((n) => (n.group = id));
   return { cfg: next, id };
 }
+/* ---------------- copy / paste ---------------- */
+
+const rand4 = () => Math.random().toString(36).slice(2, 6);
+
+function copyDescendantGroups(cfg, rootIds) {
+  const all = new Set(rootIds);
+  let grew = true;
+  while (grew) {
+    grew = false;
+    for (const g of cfg.groups || [])
+      if (g.group && all.has(g.group) && !all.has(g.id)) { all.add(g.id); grew = true; }
+  }
+  return all;
+}
+
+/* Resolve what a selection means as a copyable set. Containers bring their
+   member components and child containers along. Edges come along when both
+   ends are in the set, or when explicitly selected (pasted between the
+   original endpoints as a parallel arrow). */
+export function collectCopySet(cfg, sel) {
+  const nodeIds = new Set();
+  const edgeIds = new Set();
+  let groupIds = new Set();
+
+  if (!sel) return null;
+  if (sel.kind === "node") nodeIds.add(sel.id);
+  else if (sel.kind === "edge") edgeIds.add(sel.id);
+  else if (sel.kind === "group") groupIds.add(sel.id);
+  else if (sel.kind === "multi") {
+    (sel.use.nodes ? sel.nodes : []).forEach((id) => nodeIds.add(id));
+    (sel.use.edges ? sel.edges : []).forEach((id) => edgeIds.add(id));
+    (sel.use.groups ? sel.groups : []).forEach((id) => groupIds.add(id));
+  } else return null;
+
+  groupIds = copyDescendantGroups(cfg, groupIds);
+  cfg.nodes.forEach((n) => { if (n.group && groupIds.has(n.group)) nodeIds.add(n.id); });
+  cfg.edges.forEach((e) => {
+    if (nodeIds.has(e.source) && nodeIds.has(e.target)) edgeIds.add(e.id);
+  });
+
+  const nodes = cfg.nodes.filter((n) => nodeIds.has(n.id));
+  const edges = cfg.edges.filter((e) => {
+    if (!edgeIds.has(e.id)) return false;
+    const both = nodeIds.has(e.source) && nodeIds.has(e.target);
+    const neither = !nodeIds.has(e.source) && !nodeIds.has(e.target);
+    return both || neither; /* half-copied endpoints would be ambiguous */
+  });
+  const groups = (cfg.groups || []).filter((g) => groupIds.has(g.id));
+  if (!nodes.length && !edges.length && !groups.length) return null;
+  return structuredClone({ nodes, edges, groups });
+}
+
+/* Paste a copied set with fresh unique ids, suffixed labels and an offset
+   that grows with each paste of the same clipboard. */
+export function applyPaste(cfg, clip, pasteNo = 1) {
+  const next = structuredClone(cfg);
+  const off = 26 * pasteNo;
+  const taken = new Set([
+    ...next.nodes.map((n) => n.id),
+    ...next.edges.map((e) => e.id),
+    ...(next.groups || []).map((g) => g.id),
+    ...next.processes.map((p) => p.id)
+  ]);
+  const fresh = (base) => {
+    let tok = rand4(), id = `${base}-${tok}`;
+    while (taken.has(id)) { tok = rand4(); id = `${base}-${tok}`; }
+    taken.add(id);
+    return { id, tok };
+  };
+
+  const gMap = new Map(), nMap = new Map();
+  const gTok = new Map();
+  for (const g of clip.groups) {
+    const { id, tok } = fresh(g.id);
+    gMap.set(g.id, id);
+    gTok.set(g.id, tok);
+  }
+  for (const g of clip.groups) {
+    const c = structuredClone(g);
+    const tok = gTok.get(g.id);
+    c.id = gMap.get(g.id);
+    c.label = `${g.label} (${tok})`;
+    c.position = { x: g.position.x + off, y: g.position.y + off };
+    if (c.group) c.group = gMap.get(c.group) || c.group; /* stay in same parent if it wasn't copied */
+    next.groups = next.groups || [];
+    next.groups.push(c);
+  }
+  for (const n of clip.nodes) {
+    const { id, tok } = fresh(n.id);
+    nMap.set(n.id, id);
+    const c = structuredClone(n);
+    c.id = id;
+    c.label = `${n.label} (${tok})`;
+    c.position = { x: n.position.x + off, y: n.position.y + off };
+    if (c.group) c.group = gMap.get(c.group) || c.group;
+    next.nodes.push(c);
+  }
+  for (const e of clip.edges) {
+    const { id } = fresh(e.id);
+    const c = structuredClone(e);
+    c.id = id;
+    c.source = nMap.get(e.source) || e.source;
+    c.target = nMap.get(e.target) || e.target;
+    if (c.waypoints) c.waypoints = c.waypoints.map((p) => ({ x: p.x + off, y: p.y + off }));
+    if (nMap.has(e.source) || nMap.has(e.target) || !c.waypoints) { /* keep */ }
+    next.edges.push(c);
+  }
+  return next;
+}

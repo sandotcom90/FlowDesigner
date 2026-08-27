@@ -26,7 +26,7 @@ import ProcessBuilder from "./editor/ProcessBuilder";
 import {
   addNode, addGroup, addEdge, deleteNode, deleteEdge, deleteGroup, deleteProcess,
   renameId, updateElement, insertWaypoint, insertWaypointAt, moveWaypoint, removeWaypoint,
-  reverseEdge, deleteMany, applyNodeResize, applyGroupResize, applyMultiResize, setFontSizes, reparentByPosition,
+  reverseEdge, deleteMany, applyNodeResize, applyGroupResize, applyMultiResize, setFontSizes, collectCopySet, applyPaste, reparentByPosition,
   addPolyGroup, wrapSelection, setLabelPos, portsForNode,
   descendantGroups, allIds, slugId, edgePoints, TYPE_LABEL
 } from "./editor/ops";
@@ -409,6 +409,10 @@ export default function App() {
      through a ref rather than captured in their closure */
   const selectionRef = useRef(null);
   selectionRef.current = selection;
+  const configRef = useRef(null);
+  configRef.current = config;
+  const modeRef = useRef("view");
+  modeRef.current = mode;
 
   const resizeTogether = (kind, id) => {
     const sel = selectionRef.current;
@@ -421,6 +425,24 @@ export default function App() {
     const inSel = kind === "node" ? eff.nodes.includes(id) : eff.groups.includes(id);
     return total > 1 && inSel ? eff : null;
   };
+
+  /* ---- copy / paste ---- */
+  const clipRef = useRef(null);
+  const [clipVer, setClipVer] = useState(0);
+
+  const copySelection = useCallback(() => {
+    const set = collectCopySet(configRef.current, selectionRef.current);
+    if (!set) return;
+    clipRef.current = { set, pastes: 0 };
+    setClipVer((v) => v + 1);
+  }, []);
+
+  const pasteClipboard = useCallback(() => {
+    const clip = clipRef.current;
+    if (!clip || modeRef.current !== "edit") return;
+    clip.pastes += 1;
+    setConfig((c) => applyPaste(c, clip.set, clip.pastes));
+  }, [setConfig]);
 
   const rsHandlers = useMemo(
     () => ({
@@ -723,6 +745,17 @@ export default function App() {
           redo();
           return;
         }
+        if (k === "c") {
+          if (window.getSelection && String(window.getSelection())) return; /* let text copy through */
+          e.preventDefault();
+          copySelection();
+          return;
+        }
+        if (k === "v") {
+          e.preventDefault();
+          pasteClipboard();
+          return;
+        }
       }
       if (e.key !== "Delete" && e.key !== "Backspace") return;
       if (typing) return;
@@ -733,7 +766,7 @@ export default function App() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [editing, builder, selection, confirmDelete, undo, redo, cancelDraw, closeLoop]);
+  }, [editing, builder, selection, confirmDelete, undo, redo, cancelDraw, closeLoop, copySelection, pasteClipboard]);
 
   /* ---- process builder ---- */
   const startBuilder = useCallback((proc) => {
@@ -1221,6 +1254,22 @@ export default function App() {
           </button>
           <button className="pp-mini" onClick={redo} disabled={histVer >= 0 && redoRef.current.length === 0} title="Redo (Ctrl+Shift+Z / Ctrl+Y)">
             &#8631; redo
+          </button>
+          <button
+            className="pp-mini"
+            onClick={copySelection}
+            disabled={!selection}
+            title="Copy the selected item(s) (Ctrl+C)"
+          >
+            copy
+          </button>
+          <button
+            className="pp-mini"
+            onClick={pasteClipboard}
+            disabled={clipVer >= 0 && (!clipRef.current || !editing)}
+            title="Paste copied item(s) with new names (Ctrl+V) &#8212; edit mode"
+          >
+            paste
           </button>
         </div>
 
