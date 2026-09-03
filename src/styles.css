@@ -60,6 +60,9 @@ html, body, #root {
   letter-spacing: 0.01em;
   padding: 0 10px;
   pointer-events: none;
+  white-space: pre-wrap;      /* honour typed line breaks */
+  overflow-wrap: break-word;
+  line-height: 1.25;
 }
 
 .port {
@@ -90,6 +93,8 @@ html, body, #root {
   text-transform: uppercase;
   letter-spacing: 0.14em;
   color: var(--ink-soft);
+  white-space: pre-wrap;
+  max-width: calc(100% - 24px);
 }
 
 /* ---------- highlight states ---------- */
@@ -122,6 +127,9 @@ html, body, #root {
   color: var(--ink-soft);
   pointer-events: none;
   transition: opacity 0.25s;
+  white-space: pre-wrap;
+  text-align: center;
+  max-width: 220px;
 }
 .edge-label-dim { opacity: 0.1; }
 
@@ -947,3 +955,17 @@ html, body, #root {
   background: #fff; cursor: pointer;
 }
 .pp-color-val { flex: 1; font-family: var(--mono); font-size: 11px; color: var(--ink-soft); }
+
+.pp-label {
+  width: 100%;
+  resize: vertical;
+  min-height: 30px;
+  font-family: var(--mono);
+  font-size: 12px;
+  line-height: 1.4;
+  border: 1.5px solid var(--rule);
+  border-radius: 6px;
+  padding: 5px 8px;
+  background: #fff;
+}
+.pp-label:focus { outline: none; border-color: var(--accent); }

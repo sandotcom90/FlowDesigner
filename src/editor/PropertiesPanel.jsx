@@ -121,7 +121,13 @@ export default function PropertiesPanel({ cfg, selection, onRename, onPatch, onD
 
       {kind !== "edge" && (
         <Field label="label">
-          <input value={el.label} onChange={(e) => onPatch({ label: e.target.value })} />
+          <textarea
+            className="pp-label"
+            rows={Math.min(4, Math.max(1, String(el.label || "").split("\n").length))}
+            value={el.label}
+            placeholder="Multi-line labels: press Enter for a new line"
+            onChange={(e) => onPatch({ label: e.target.value })}
+          />
         </Field>
       )}
 
