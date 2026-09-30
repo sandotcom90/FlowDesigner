@@ -251,3 +251,87 @@ Detect the mode from the request (or accept an explicit command). Commands can b
 
 "audience: <name>"
 <!-- Changes the tone and depth, e.g., "audience: CFO" or "audience: offshore dev team". -->
+
+
+
+2. Input examples
+
+Each example is deliberately a bit incomplete, so the Judge has real gaps to catch. That makes for a better demo.
+
+Example 1 – Requirements (/story)
+
+/story
+Context: Retail bank, mobile app, Scrum, audience = dev + QA team.
+Customers want to set up recurring e-transfers (weekly/monthly) from the app.
+Should respect daily transfer limits. Business wants it live before Q1 campaign.
+Existing one-time e-transfer already works.
+
+The Judge should ask about: limit breaches on recurring runs, weekends and holidays, end dates, insufficient funds and retries, edits to in-flight schedules, and notifications.
+
+Example 2 – BRD (/brd)
+
+/brd audience: steering committee
+We need to replace the manual Excel-based vendor onboarding process in Procurement.
+Today it takes ~15 days, involves Procurement, Legal, AP and Compliance.
+Goal: under 5 days, full audit trail, integrate with SAP vendor master.
+Constraint: must meet SOX controls. Budget approved for phase 1 only.
+
+Example 3 – Backlog refinement (/refine)
+
+/refine
+PAY-101 | As a user I want faster payments | 13 pts | no AC
+PAY-102 | Add payment status page | 5 pts | AC: shows status
+PAY-103 | Payment status screen for customers | 8 pts | no AC
+PAY-104 | Integrate with fraud engine | ? | Blocked by vendor
+PAY-105 | As an ops agent I want to reprocess failed payments so that customers aren't impacted | 3 pts | AC: Given a failed payment When agent clicks retry Then payment is resent
+
+Expected output: PAY-102 and PAY-103 flagged as duplicates, PAY-101 flagged as vague and too large, PAY-104 as a dependency risk, and PAY-105's AC flagged for missing idempotency and double-retry handling.
+
+Example 4 – Meeting chain (/meeting /raid)
+
+/meeting /raid
+Transcript (Data Migration sync, Sept 29):
+Priya: Legacy customer table has ~2M records, maybe 10% duplicates, not sure.
+Tom: Target go-live is Nov 15 but UAT env isn't ready yet, infra says two weeks.
+Priya: We still don't know who signs off data reconciliation.
+Alex: Let's assume we freeze legacy changes a week before cut-over.
+Tom: I'll chase infra. Alex to draft the cut-over plan.
+
+Example 5 – Root cause (/rca)
+
+/rca audience: operations leadership
+Problem: Month-end GL reconciliation failed 3 of the last 4 months.
+Breaks are always in FX-converted entries. Rates come from a nightly batch.
+Two of the failures coincided with the batch finishing after 6 AM.
+Team has been fixing manually (~2 days of effort each time).
+
+Example 6 – Gap analysis + tests, fast mode (/gap /tests)
+
+/gap /tests fast mode
+Current: Loan applications are checked for KYC manually by the back office after submission.
+Target: Real-time KYC check at application submission via the new identity-verification API,
+auto-reject on hard fail, route to manual review on soft fail.
+
+Example 7 – Executive summary (/exec)
+
+/exec audience: CIO
+Project: Claims Portal Modernization. Status: Amber.
+Done: 3 of 5 releases, adoption at 62% vs 75% target.
+Issue: Release 4 slipped 3 weeks due to vendor API delay.
+Risk: If R5 slips past Dec 15, we lose the year-end change window.
+Ask: Approve $40K for vendor fast-track or accept a Q1 date.
+
+Example 8 – Retro (/retro)
+
+/retro
+Sticky notes Sprint 14:
+- too many meetings
+- stories kept changing mid-sprint
+- great pairing with QA
+- env down twice
+- PO not available for questions
+- ACs unclear on PAY stories
+- deployment took 4 hours again
+- standups run long
+
+For the challenge demo, I'd lead with Example 4 (/meeting /raid). It shows chaining, the Judge flagging real gaps such as the unknown sign-off owner and the unconfirmed duplicate rate, and a risk heat map all in one run.
