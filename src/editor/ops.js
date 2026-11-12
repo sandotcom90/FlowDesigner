@@ -790,3 +790,17 @@ export function applyPaste(cfg, clip, pasteNo = 1) {
   }
   return next;
 }
+
+/* Move one end of an existing edge to a different port — on the same
+   component or another one. Waypoints and label are kept. */
+export function applyReconnect(cfg, edgeId, conn) {
+  if (!conn || !conn.source || !conn.target) return cfg;
+  const next = structuredClone(cfg);
+  const e = next.edges.find((x) => x.id === edgeId);
+  if (!e) return cfg;
+  e.source = conn.source;
+  e.target = conn.target;
+  e.sourcePort = conn.sourceHandle ? conn.sourceHandle.slice(2) : "r";
+  e.targetPort = conn.targetHandle ? conn.targetHandle.slice(2) : "l";
+  return next;
+}

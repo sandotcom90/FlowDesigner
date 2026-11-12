@@ -26,7 +26,7 @@ import ProcessBuilder from "./editor/ProcessBuilder";
 import {
   addNode, addGroup, addEdge, deleteNode, deleteEdge, deleteGroup, deleteProcess,
   renameId, updateElement, insertWaypoint, insertWaypointAt, moveWaypoint, removeWaypoint,
-  reverseEdge, deleteMany, applyNodeResize, applyGroupResize, applyMultiResize, setFontSizes, collectCopySet, applyPaste, reparentByPosition,
+  reverseEdge, deleteMany, applyNodeResize, applyGroupResize, applyMultiResize, setFontSizes, collectCopySet, applyPaste, applyReconnect, reparentByPosition,
   addPolyGroup, wrapSelection, setLabelPos, portsForNode,
   descendantGroups, allIds, slugId, edgePoints, TYPE_LABEL
 } from "./editor/ops";
@@ -371,6 +371,8 @@ export default function App() {
   const [tip, setTip] = useState(null);
   const [nodes, setNodes] = useState([]);
   const [edges, setEdges] = useState([]);
+  const renamedRef = useRef(null); /* {from,to} for one sync after an id rename */
+  const renameGuardRef = useRef(0); /* timestamp; swallows one spurious deselect after a rename */
   const fileRef = useRef(null);
   const { screenToFlowPosition, getZoom } = useReactFlow();
 
@@ -465,13 +467,17 @@ export default function App() {
     const f = toFlow(config, {
       selectedProcId: selectedProc, editing, builder, underlay, wpHandlers, rsHandlers
     });
+    const rn = renamedRef.current;
+    renamedRef.current = null;
     setNodes((prev) => {
       /* preserve React Flow selection flags across rebuilds */
       const sel = new Set(prev.filter((n) => n.selected).map((n) => n.id));
+      if (rn && sel.delete(rn.from)) sel.add(rn.to);
       return f.nodes.map((n) => (sel.has(n.id) ? { ...n, selected: true } : n));
     });
     setEdges((prev) => {
       const sel = new Set(prev.filter((e) => e.selected).map((e) => e.id));
+      if (rn && sel.delete(rn.from)) sel.add(rn.to);
       return f.edges.map((e) => (sel.has(e.id) ? { ...e, selected: true } : e));
     });
   }, [config, selectedProc, editing, builder, underlay, wpHandlers, rsHandlers]);
@@ -511,7 +517,15 @@ export default function App() {
       const grps = sn.filter((n) => n.type === "grouper").map((n) => n.id);
       const eds = se.map((e) => e.id);
       const total = shapes.length + grps.length + eds.length;
-      if (total === 0) setSelection(null);
+      if (total === 0) {
+        /* an id rename replaces the element under React Flow's feet, which can
+           surface as one bogus "nothing selected" event — swallow exactly that */
+        if (Date.now() - renameGuardRef.current < 600) {
+          renameGuardRef.current = 0;
+          return;
+        }
+        setSelection(null);
+      }
       else if (total === 1) {
         if (shapes.length) setSelection({ kind: "node", id: shapes[0] });
         else if (grps.length) setSelection({ kind: "group", id: grps[0] });
@@ -524,6 +538,15 @@ export default function App() {
       }
     },
     [editing, builder]
+  );
+
+  /* ---- reconnect (drag an edge end to another port/component) ---- */
+  const onReconnect = useCallback(
+    (oldEdge, conn) => {
+      if (!conn?.source || !conn?.target) return;
+      setConfig((c) => applyReconnect(c, oldEdge.id, conn));
+    },
+    [setConfig]
   );
 
   /* ---- connect (draw edges) ---- */
@@ -976,6 +999,11 @@ export default function App() {
   const handleRename = (newId) => {
     const r = renameId(config, selection.kind, selection.id, newId);
     if (r.error) return r.error;
+    /* the flow sync preserves React Flow's selection by id, so tell it the
+       selected element is about to change id — otherwise the renamed element
+       comes back deselected and the side panel vanishes mid-edit */
+    renamedRef.current = { from: selection.id, to: newId };
+    renameGuardRef.current = Date.now();
     setConfig(r.cfg);
     setSelection({ ...selection, id: newId });
     return null;
@@ -1083,6 +1111,9 @@ export default function App() {
           onEdgeMouseLeave={clearTip}
           onSelectionChange={onSelectionChange}
           onConnect={onConnect}
+          onReconnect={onReconnect}
+          edgesReconnectable={editing && !builder}
+          reconnectRadius={16}
           onNodeClick={onNodeClick}
           onEdgeClick={onEdgeClick}
           onEdgeDoubleClick={onEdgeDoubleClick}
